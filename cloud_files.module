@@ -1,0 +1,193 @@
+<?php
+
+function cloud_files_menu() {
+
+  $items['admin/config/media/cloud-files'] = array(
+    'title' => 'Cloud Files',
+    'description' => 'Cloud Files Configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cloud_files_admin'),
+    'access arguments' => array('access administration pages'),
+  ); 
+  
+  return $items;
+}
+
+/**
+ * Implements hook_admin().
+ */
+function cloud_files_admin() {
+  $form['rackspace_cloud_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Username'),
+    '#description' => t('Enter your Rackspace Cloud username.'),
+    '#default_value' => variable_get('rackspace_cloud_username'),
+    '#required' => TRUE,
+  );
+  
+  $form['rackspace_cloud_api_key'] = array(
+    '#type' => 'password',
+    '#title' => t('API Key'),
+    '#description' => t('Enter your Rackspace Cloud API Key.'),
+    '#default_value' => variable_get('rackspace_cloud_api_key'),
+    '#required' => TRUE,
+  );
+
+  $form['rackspace_cloud_container'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Container'),
+    '#description' => t('Enter your Rackspace Cloud Container name.'),
+    '#default_value' => variable_get('rackspace_cloud_container'),
+    '#required' => TRUE,
+  );
+
+  $form['rackspace_cloud_cdn_domain'] = array(
+    '#type' => 'value',
+    '#default_value' => variable_get('rackspace_cloud_cdn_domain'),
+  );
+
+  //$form['#submit'][] = 'cloud_files_settings_submit';
+  
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_field_validate().
+ *
+ * Validate Rackspace Cloud settings
+ */
+function cloud_files_admin_validate($form, &$form_state) {
+  $info = libraries_load('rackspacecloudfiles');
+  if ($info['loaded']) {
+      $user = $form_state['values']['rackspace_cloud_username'];
+      $apikey = $form_state['values']['rackspace_cloud_api_key'];
+      $container = $form_state['values']['rackspace_cloud_container'];
+
+      try {
+        $auth = new CF_Authentication($user, $apikey);
+        # $auth->ssl_use_cabundle();  # bypass cURL's old CA bundle
+        $auth->authenticate();
+      } catch (AuthenticationException $e) {
+        form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
+      }
+      try {
+        $conn = new CF_Connection($auth);
+        $container = $conn->get_container($container);
+        $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->cdn_uri);
+      } catch (NoSuchContainerException $e) {
+        form_set_error('rackspace_cloud_container', t('Container does not exist.'));
+      }
+  }
+  else {
+    form_set_error('', t('The Rackspace Cloud Files API was not loaded.'));
+  }
+}
+
+/*
+function cloud_files_settings_submit($form, $form_state) {
+  $user = $form_state['values']['rackspace_cloud_username'];
+  $apikey = $form_state['values']['rackspace_cloud_api_key'];
+  $container = $form_state['values']['rackspace_cloud_container'];
+}
+ */
+
+/**
+ * Implements hook_stream_wrappers().
+ *
+ * expose the stream wrappers to Drupal
+ */
+function cloud_files_stream_wrappers() {
+  //Rackspace Cloud Files stream wrapper
+  $wrappers = array(
+    'rcf' => array(
+      'name' => t('Rackspace Cloud Files'),
+      'class' => 'RackspaceCloudFilesStreamWrapper',
+      'description' => t('Rackspace Cloud Files.'),
+    ),
+  );
+  return $wrappers;
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ *
+ * errr, i really dont like this, but heres what it does
+ *
+ * this is to get the image styles created on rackspace
+ * the image styles are ony created when they are requested
+ * but, if they are served from Rackspace initially, then Drupal
+ * will never get a request for them, and they will never get created
+ *
+ * so this checks urls for any requests to rackspace files
+ * if its a request for a styled image, the path is changed to Drupals
+ * private file system path so that Drupal gets the request for the image
+ * and creates it (on rackspace)
+ *
+ * id like to just call image_style_create_derivative (in image.module)
+ * somehow to create the images without have to mess with extra requests to Drupal
+ */
+function cloud_files_url_outbound_alter(&$path, &$options, $original_path) {
+  $cdn_domain = variable_get('rackspace_cloud_cdn_domain');
+  $style_path = $cdn_domain . '/styles/';
+  // strip protocol from the requested path
+  $path_no_protocol = str_replace(array('http://', 'https://'), '', $path);
+
+  //if the requested path is for rackspace cloud files style image
+  if (substr($path_no_protocol, 0, strlen($style_path)) == $style_path) {
+    $style_path_fragment = substr($path_no_protocol, strlen($style_path));
+    // deliver the image through the private file system
+    // also creates derivative image on rackspace cloud files
+    $path = url('system/files/styles/' . $style_path_fragment);
+  }
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function cloud_files_libraries_info() {
+  return array(
+    'rackspacecloudfiles' => array(
+      'title' => 'Rackspace Cloud Files PHP API',
+      'vendor url' => 'https://github.com/rackspace/php-cloudfiles',
+      'download url' => 'https://github.com/rackspace/php-cloudfiles',
+      'path' => 'php-cloudfiles',
+      'version arguments' => array(
+        'file' => 'php-cloudfiles/Changelog',
+        'pattern' => '/(\d+\.\d+(\.\d+)?)/',
+      ),
+      'files' => array(
+        'php' => array(
+          'cloudfiles.php',
+        ),
+      ),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_requirements().
+ */
+function cloud_files_requirements() {
+  $t = get_t();
+  $requirements = array();
+
+  $info = libraries_load('rackspacecloudfiles');
+  if (!$info['loaded']) {
+    $requirements['cloud_files'] = array(
+      'severity' => REQUIREMENT_ERROR,
+      'title' => $t('Rackspace Cloud Files PHP API'),
+      'value' => $t('Failed to load the Rackspace Cloud Files PHP API'),
+      'description' => $t('Please make sure the Rackspace Cloud Files PHP API library is installed in the libraries directory.'),
+    );
+  }
+  else {
+    $requirements['cloud_files'] = array(
+      'severity' => REQUIREMENT_INFO,
+      'title' => $t('Cloud Files'),
+      'value' => $info['version'],
+    );
+  }
+
+  return $requirements;
+}
