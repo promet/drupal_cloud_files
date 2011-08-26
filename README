@@ -3,11 +3,11 @@ Installation
 - Download and install the Libraries (7.x-2.x branch) module
 http://drupal.org/project/libraries
 
-- Download and install Rackspace's PHP API binding and place it in sites/all/libraries/rackspacecloudfies/
-(sites/all/libraries/rackspacecloudfies/php-cloudfiles/cloudfiles.php)
-https://github.com/rackspace/php-cloudfiles/
+- Download Rackspace's PHP API binding (from https://github.com/rackspace/php-cloudfiles/).  Unzip and rename the folder php-cloudfiles.
 
-- Configure your setttings at /admin/config/cloud-files/settings
+- Move the php-cloudfiles folder to sites/all/libraries/rackspacecloudfiles/ so that the path to cloudfiles.php is sites/all/libraries/rackspacecloudfies/php-cloudfiles/cloudfiles.php
+
+- Configure your setttings at /admin/config/media/cloud-files
 
 - Visit admin/config/media/file-system and set the Default download method to Rackspace Cloud Files
 
