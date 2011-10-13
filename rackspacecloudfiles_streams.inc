@@ -671,7 +671,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   }
 
   public function getContainer() {
-    libraries_load('rackspacecloudfiles');
+    libraries_load('rackspacecloud');
     $auth = $this->getAuthentication();
     $conn = new CF_Connection($auth);
     $this->container = $conn->get_container(variable_get('rackspace_cloud_container'));

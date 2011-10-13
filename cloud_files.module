@@ -7,7 +7,7 @@ function cloud_files_menu() {
     'description' => 'Cloud Files Configuration',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cloud_files_admin'),
-    'access arguments' => array('access administration pages'),
+    'access arguments' => array('administer site configuration'),
   ); 
   
   return $items;
@@ -57,7 +57,7 @@ function cloud_files_admin() {
  * Validate Rackspace Cloud settings
  */
 function cloud_files_admin_validate($form, &$form_state) {
-  $info = libraries_load('rackspacecloudfiles');
+  $info = libraries_load('rackspacecloud');
   if ($info['loaded']) {
       $user = $form_state['values']['rackspace_cloud_username'];
       $apikey = $form_state['values']['rackspace_cloud_api_key'];
@@ -74,7 +74,7 @@ function cloud_files_admin_validate($form, &$form_state) {
         $conn = new CF_Connection($auth);
         $container = $conn->get_container($container);
         $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->cdn_uri);
-      } catch (NoSuchContainerException $e) {
+      } catch (Exception $e) {
         form_set_error('rackspace_cloud_container', t('Container does not exist.'));
       }
   }
@@ -146,7 +146,7 @@ function cloud_files_url_outbound_alter(&$path, &$options, $original_path) {
  */
 function cloud_files_libraries_info() {
   return array(
-    'rackspacecloudfiles' => array(
+    'rackspacecloud' => array(
       'title' => 'Rackspace Cloud Files PHP API',
       'vendor url' => 'https://github.com/rackspace/php-cloudfiles',
       'download url' => 'https://github.com/rackspace/php-cloudfiles',
@@ -172,7 +172,7 @@ function cloud_files_requirements() {
   $t = get_t();
   $requirements = array();
 
-  $info = libraries_load('rackspacecloudfiles');
+  $info = libraries_load('rackspacecloud');
   if (!$info['loaded']) {
     $requirements['cloud_files'] = array(
       'severity' => REQUIREMENT_ERROR,
