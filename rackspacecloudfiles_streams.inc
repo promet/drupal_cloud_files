@@ -137,7 +137,19 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
         if (!isset($this->container)) {
             $this->getContainer();
         }
-        $this->object = $this->container->get_object($target);
+		
+	    try{
+	      $this->object = $this->container->get_object($target);
+	    } catch (NoSuchObjectException $e) {
+		  // Image styles support
+		  // image is generated when its first requested, so serve from the private file system
+		  // this will save the file to rackspace and it'll exist next and wont error into this
+		  $path = explode('/', $this->getLocalPath());
+		  if ($path[0] == 'styles') {
+		    array_shift($path);
+		    return url('system/files/styles/' . implode('/', $path), array('absolute' => true));
+		  }
+	    }
     }
 
     return $this->object->public_uri();

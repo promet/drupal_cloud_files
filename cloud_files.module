@@ -109,39 +109,6 @@ function cloud_files_stream_wrappers() {
 }
 
 /**
- * Implements hook_url_outbound_alter().
- *
- * errr, i really dont like this, but heres what it does
- *
- * this is to get the image styles created on rackspace
- * the image styles are ony created when they are requested
- * but, if they are served from Rackspace initially, then Drupal
- * will never get a request for them, and they will never get created
- *
- * so this checks urls for any requests to rackspace files
- * if its a request for a styled image, the path is changed to Drupals
- * private file system path so that Drupal gets the request for the image
- * and creates it (on rackspace)
- *
- * id like to just call image_style_create_derivative (in image.module)
- * somehow to create the images without have to mess with extra requests to Drupal
- */
-function cloud_files_url_outbound_alter(&$path, &$options, $original_path) {
-  $cdn_domain = variable_get('rackspace_cloud_cdn_domain');
-  $style_path = $cdn_domain . '/styles/';
-  // strip protocol from the requested path
-  $path_no_protocol = str_replace(array('http://', 'https://'), '', $path);
-
-  //if the requested path is for rackspace cloud files style image
-  if (substr($path_no_protocol, 0, strlen($style_path)) == $style_path) {
-    $style_path_fragment = substr($path_no_protocol, strlen($style_path));
-    // deliver the image through the private file system
-    // also creates derivative image on rackspace cloud files
-    $path = url('system/files/styles/' . $style_path_fragment);
-  }
-}
-
-/**
  * Implements hook_libraries_info().
  */
 function cloud_files_libraries_info() {
