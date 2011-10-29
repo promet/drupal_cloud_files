@@ -1,0 +1,16 @@
+CHANGELOG for Cloud Files 1 for Drupal 7
+
+Cloud Files 7.x-1.x, xxxx-xx-xx
+-------------------------------
+ 
+Cloud Files 7.x-1.0-beta2, 2011-10-29
+-------------------------------------
+by mr.moses: added CHANGELOG.txt
+#1223534 by zeezack, mr.moses, mstrelan: Fixed error when not using a directory
+#1310056 by  mr.moses, mstrelan: fix image styles
+by mr.moses: cleaned up instructions
+
+
+Cloud Files 7.x-1.0-beta1, 2011-10-14
+-------------------------------------
+First public release
