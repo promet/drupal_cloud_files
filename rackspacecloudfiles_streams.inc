@@ -583,18 +583,21 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     $this->uri = $uri;
     $target = file_uri_target($this->uri);
 
-    //TODO check if it already exists?
-    //TODO check options for recursive?
-    $recursive = (bool) ($options & STREAM_MKDIR_RECURSIVE);
+    //only make directories if there are directories to make
+    if($target) {
+      //TODO check if it already exists?
+      //TODO check options for recursive?
+      $recursive = (bool) ($options & STREAM_MKDIR_RECURSIVE);
 
-    if (!isset($this->container)) {
+      if (!isset($this->container)) {
         $this->getContainer();
-    }
+      }
 
-    //create_paths will create virtual folder files in Rackspace Cloud Files
-    //this expects the a full path to a file
-    //so add a file name to create all directories (wont create MKDIR.txt)
-    $this->container->create_paths($target . '/MKDIR.txt');
+      //create_paths will create virtual folder files in Rackspace Cloud Files
+      //this expects the a full path to a file
+      //so add a file name to create all directories (wont create MKDIR.txt)
+      $this->container->create_paths($target . '/MKDIR.txt');
+    }
 
     return TRUE;
   }
@@ -696,8 +699,8 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       $auth_token = $credentials->data['auth_token'];
       $storage_url = $credentials->data['storage_url'];
       $cdnm_url = $credentials->data['cdnm_url'];
-
-      $auth = new CF_Authentication();
+	  
+	    $auth = new CF_Authentication();
       $auth->load_cached_credentials($auth_token, $storage_url, $cdnm_url);
     }
     else {
