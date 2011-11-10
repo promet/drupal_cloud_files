@@ -485,11 +485,15 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.url-stat.php
    */
   public function url_stat($uri, $flags) {
+    if($uri == null) {
+      $uri = $this->uri;
+    }
+
     $return = FALSE; // Default to fail.
     $mode = 0;
 
     $this->uri = $uri;
-    $target = file_uri_target($this->uri);
+    $target = $this->getLocalPath($uri);
 
     if (!isset($this->object)) {
         if (!isset($this->container)) {
@@ -507,7 +511,8 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
 
     if ($objexists) {
-      if ($this->object->content_type == "application/directory") {
+      //if the target is empty, its the root of the container (counts as a directory)
+      if ($this->object->content_type == "application/directory" || empty($target)) {
         $mode = 0040000; // S_IFDIR means it's a directory.
       }
       else {
