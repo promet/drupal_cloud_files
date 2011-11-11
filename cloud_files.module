@@ -30,7 +30,6 @@ function cloud_files_admin() {
     '#title' => t('API Key'),
     '#description' => t('Enter your Rackspace Cloud API Key.'),
     '#default_value' => variable_get('rackspace_cloud_api_key'),
-    '#required' => TRUE,
   );
 
   $form['rackspace_cloud_container'] = array(
@@ -39,6 +38,13 @@ function cloud_files_admin() {
     '#description' => t('Enter your Rackspace Cloud Container name.'),
     '#default_value' => variable_get('rackspace_cloud_container'),
     '#required' => TRUE,
+  );
+
+  $form['rackspace_cloud_debug'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Debug'),
+    '#description' => t('Check the box to enable logging.'),
+    '#default_value' => variable_get('rackspace_cloud_debug'),
   );
 
   $form['rackspace_cloud_cdn_domain'] = array(
@@ -60,8 +66,16 @@ function cloud_files_admin_validate($form, &$form_state) {
   $info = libraries_load('rackspacecloud');
   if ($info['loaded']) {
       $user = $form_state['values']['rackspace_cloud_username'];
-      $apikey = $form_state['values']['rackspace_cloud_api_key'];
+      $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
       $container = $form_state['values']['rackspace_cloud_container'];
+
+      //if API Key was left empty, use the previously saved API Key
+      //with this, it wont be possible to clear the API Key, but it can be changed to something else
+      //this is so the API key doesnt have to be entered every time
+      //if you are changing container, or debug mode
+      if (!$form_state['values']['rackspace_cloud_api_key']) {
+        $form_state['values']['rackspace_cloud_api_key'] = $apikey;
+      }
 
       try {
         $auth = new CF_Authentication($user, $apikey);

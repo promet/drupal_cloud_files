@@ -1,6 +1,7 @@
 <?php
 /**
- * @file rackspacecloudfiles_streams.inc
+ * @file
+ * 
  * Implement DrupalStreamWrapperInterface to provide an rcf:// streamwrapper.
  */
 class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
@@ -131,25 +132,29 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * Overrides getExternalUrl().
    */
   function getExternalUrl() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing getExternalUrl (%uri)", array('%uri' => $this->uri), WATCHDOG_DEBUG);
+    }
+
     $target = file_uri_target($this->uri);
 
     if (!isset($this->object)) {
         if (!isset($this->container)) {
             $this->getContainer();
         }
-		
-	    try{
-	      $this->object = $this->container->get_object($target);
-	    } catch (NoSuchObjectException $e) {
-		  // Image styles support
-		  // image is generated when its first requested, so serve from the private file system
-		  // this will save the file to rackspace and it'll exist next and wont error into this
-		  $path = explode('/', $this->getLocalPath());
-		  if ($path[0] == 'styles') {
-		    array_shift($path);
-		    return url('system/files/styles/' . implode('/', $path), array('absolute' => true));
-		  }
-	    }
+        
+        try{
+          $this->object = $this->container->get_object($target);
+        } catch (NoSuchObjectException $e) {
+              // Image styles support
+              // image is generated when its first requested, so serve from the private file system
+              // this will save the file to rackspace and it'll exist next and wont error into this
+              $path = explode('/', $this->getLocalPath());
+              if ($path[0] == 'styles') {
+                array_shift($path);
+                return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
+              }
+        }
     }
 
     return $this->object->public_uri();
@@ -195,6 +200,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.stream-open.php
    */
   public function stream_open($uri, $mode, $options, &$opened_path) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing stream_open (%uri)", array('%uri' => $uri), WATCHDOG_DEBUG);
+    }
+
     //reset data
     $this->stream_pointer = 0;
     $this->stream_data = NULL;
@@ -363,6 +372,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.stream-flush.php
    */
   public function stream_flush() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "flushing file, writing to Rackspace (stream_flush) %file", array('%file' => $this->uri), WATCHDOG_DEBUG);
+    }
+
     if (!$this->object) {
         if (!$this->container) {
             $this->getContainer();
@@ -408,8 +421,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.stream-stat.php
    */
   public function stream_stat() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing stream_stat", NULL, WATCHDOG_DEBUG);
+    }
     return array(
-      'size' => drupal_strlen($this->stream_data),
+      'size' => strlen($this->stream_data),
     );
   }
 
@@ -422,6 +438,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.stream-close.php
    */
   public function stream_close() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing stream_close", NULL, WATCHDOG_DEBUG);
+    }
+
     unset($this->object);
     $this->stream_data = NULL;
     $this->stream_pointer = 0;
@@ -441,6 +461,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.unlink.php
    */
   public function unlink($uri) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing unlink", NULL, WATCHDOG_DEBUG);
+    }
+
     if (!isset($this->container)) {
         $this->getContainer();
     }
@@ -461,6 +485,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.rename.php
    */
   public function rename($from_uri, $to_uri) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing rename (%from, %to)", array("%from" => $from_uri, "%to" => $to_uri), WATCHDOG_DEBUG);
+    }
+
     //TODO rename
     return FALSE;
   }
@@ -485,8 +513,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.url-stat.php
    */
   public function url_stat($uri, $flags) {
-    if($uri == null) {
+    if ($uri == NULL) {
       $uri = $this->uri;
+    }
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "Checking file status (url_stat) %file", array('%file' => $uri), WATCHDOG_DEBUG);
     }
 
     $return = FALSE; // Default to fail.
@@ -504,7 +535,9 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     //check if the file exists
     $objexists = TRUE;
     try{
-      $this->object = $this->container->get_object($target);
+      if (!empty($target)) {
+        $this->object = $this->container->get_object($target);
+      }
     } catch (NoSuchObjectException $e) {
       //$file = $cont->create_object($target);
       $objexists = FALSE;
@@ -512,7 +545,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     if ($objexists) {
       //if the target is empty, its the root of the container (counts as a directory)
-      if ($this->object->content_type == "application/directory" || empty($target)) {
+      if (empty($target) || $this->object->content_type == "application/directory") {
         $mode = 0040000; // S_IFDIR means it's a directory.
       }
       else {
@@ -558,6 +591,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see drupal_dirname()
    */
   public function dirname($uri = NULL) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing dirname (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
+    }
+
     list($scheme, $target) = explode('://', $uri, 2);
     $target  = $this->getTarget($uri);
     $dirname = dirname($target);
@@ -585,11 +622,16 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.mkdir.php
    */
   public function mkdir($uri, $mode, $options) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing mkdir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
+    }
+
     $this->uri = $uri;
+
     $target = file_uri_target($this->uri);
 
     //only make directories if there are directories to make
-    if($target) {
+    if ($target) {
       //TODO check if it already exists?
       //TODO check options for recursive?
       $recursive = (bool) ($options & STREAM_MKDIR_RECURSIVE);
@@ -621,6 +663,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.rmdir.php
    */
   public function rmdir($uri, $options) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing rmdir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
+    }
+
     // TODO: delete directory and all files
     return FALSE;
   }
@@ -639,6 +685,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.dir-opendir.php
    */
   public function dir_opendir($uri, $options) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing dir_opendir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
+    }
+
     /* TODO get list of items in directory */
     return FALSE;
   }
@@ -650,6 +700,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    *   The next filename, or FALSE if there are no more files in the directory.
    */
   public function dir_readdir() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing dir_readdir", NULL, WATCHDOG_DEBUG);
+    }
+
     if ($this->directory_pointer < count($this->directory_list)) {
       $next = $this->directory_list[$this->directory_pointer];
       $this->directory_pointer++;
@@ -665,6 +719,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    *   TRUE on success.
    */
   public function dir_rewinddir() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing dir_rewinddir", NULL, WATCHDOG_DEBUG);
+    }
+
       //TODO: what is this?
     $this->directory_pointer = 0;
   }
@@ -678,6 +736,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.dir-closedir.php
    */
   public function dir_closedir() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing dir_closedir", NULL, WATCHDOG_DEBUG);
+    }
+
     $this->directory_pointer = 0;
     unset($this->directory_list);
     return TRUE;
@@ -687,6 +749,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * Implements abstract public function getDirectoryPath()
    */
   public function getDirectoryPath() {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "executing getDirectoryPath", NULL, WATCHDOG_DEBUG);
+    }
+
     return "http://" . variable_get('rackspace_cloud_cdn_domain');
   }
 
@@ -694,6 +760,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     libraries_load('rackspacecloud');
     $auth = $this->getAuthentication();
     $conn = new CF_Connection($auth);
+
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "requesting container from Rackspace (%container)", array('%container' => variable_get('rackspace_cloud_container')), WATCHDOG_DEBUG);
+    }
+
     $this->container = $conn->get_container(variable_get('rackspace_cloud_container'));
   }
 
@@ -701,14 +772,20 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     $credentials = cache_get("rackspace_cloud_credentials");
 
     if ($credentials) {
+      if (variable_get('rackspace_cloud_debug')) {
+        watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
+      }
       $auth_token = $credentials->data['auth_token'];
       $storage_url = $credentials->data['storage_url'];
       $cdnm_url = $credentials->data['cdnm_url'];
-	  
-	    $auth = new CF_Authentication();
+      
+      $auth = new CF_Authentication();
       $auth->load_cached_credentials($auth_token, $storage_url, $cdnm_url);
     }
     else {
+      if (variable_get('rackspace_cloud_debug')) {
+        watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
+      }
       $auth = new CF_Authentication(variable_get('rackspace_cloud_username'), variable_get('rackspace_cloud_api_key'));
       $auth->authenticate();
       $credentials = $auth->export_credentials();
