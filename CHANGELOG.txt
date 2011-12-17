@@ -2,10 +2,11 @@ CHANGELOG for Cloud Files 1 for Drupal 7
 
 Cloud Files 7.x-1.x, xxxx-xx-xx
 -------------------------------
- 
+#1341266 by mr.moses: remove CDN purge from every write
+
 Cloud Files 7.x-1.0-beta2, 2011-10-29
 -------------------------------------
-by mr.moses: added CHANGELOG.txt
+by mr.moses: added CHANGELOG.txt and renamed README -> README.txt
 #1223534 by zeezack, mr.moses, mstrelan: Fixed error when not using a directory
 #1310056 by  mr.moses, mstrelan: fix image styles
 by mr.moses: cleaned up instructions

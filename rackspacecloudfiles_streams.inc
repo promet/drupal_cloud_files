@@ -391,7 +391,6 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
     if ($this->write) {
         $this->object->write($this->stream_data);
-        $this->object->purge_from_cdn();
     }
     //$this->object = NULL;
     $this->stream_data = NULL;
