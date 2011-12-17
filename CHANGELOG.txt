@@ -2,6 +2,7 @@ CHANGELOG for Cloud Files 1 for Drupal 7
 
 Cloud Files 7.x-1.x, xxxx-xx-xx
 -------------------------------
+#1350618 by kingandy, magicmyth, morningtime, mr.moses: Support UK accounts
 #1341190 by mr.moses: update Library path
 #1341266 by mr.moses: remove CDN purge from every write
 

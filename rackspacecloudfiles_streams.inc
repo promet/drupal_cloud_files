@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * 
+ *
  * Implement DrupalStreamWrapperInterface to provide an rcf:// streamwrapper.
  */
 class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
@@ -142,7 +142,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
         if (!isset($this->container)) {
             $this->getContainer();
         }
-        
+
         try{
           $this->object = $this->container->get_object($target);
         } catch (NoSuchObjectException $e) {
@@ -756,7 +756,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   }
 
   public function getContainer() {
-    libraries_load('rackspacecloud');
+    libraries_load('rackspace');
     $auth = $this->getAuthentication();
     $conn = new CF_Connection($auth);
 
@@ -777,7 +777,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       $auth_token = $credentials->data['auth_token'];
       $storage_url = $credentials->data['storage_url'];
       $cdnm_url = $credentials->data['cdnm_url'];
-      
+
       $auth = new CF_Authentication();
       $auth->load_cached_credentials($auth_token, $storage_url, $cdnm_url);
     }
@@ -785,7 +785,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       if (variable_get('rackspace_cloud_debug')) {
         watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
       }
-      $auth = new CF_Authentication(variable_get('rackspace_cloud_username'), variable_get('rackspace_cloud_api_key'));
+      $auth = new CF_Authentication(variable_get('rackspace_cloud_username'),
+                                    variable_get('rackspace_cloud_api_key'),
+                                    NULL,
+                                    variable_get('rackspace_cloud_cdn_domain'));
       $auth->authenticate();
       $credentials = $auth->export_credentials();
       cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);

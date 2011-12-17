@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * Implements hook_menu().
+ */
 function cloud_files_menu() {
 
   $items['admin/config/media/cloud-files'] = array(
@@ -8,15 +11,104 @@ function cloud_files_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cloud_files_admin'),
     'access arguments' => array('administer site configuration'),
-  ); 
-  
+  );
+
   return $items;
+}
+
+/**
+ * Simple utility function for returning an array containing Rackspace Cloud
+ * Files authentication URLs. The Rackspace Cloud Files PHP API binding is
+ * loaded to use the US and UK URLs that are declared there.
+ *
+ * Add on to this to add new authentication URLs.
+ *
+ * @return  array
+ */
+function _cloud_files_auth_urls() {
+  $info = libraries_load('rackspace');
+  if ($info['loaded']) {
+      return array(
+        'us' => array(
+          'name' => t('United States'),
+          'url' => US_AUTHURL
+        ),
+        'gb' => array(
+          'name' => t('United Kingdom'),
+          'url' => UK_AUTHURL
+        ),
+      );
+  }
+  else {
+    form_set_error('', t('The Rackspace Cloud Files API could not be loaded.'));
+  }
 }
 
 /**
  * Implements hook_admin().
  */
 function cloud_files_admin() {
+
+  // radios group with an other option take from http://drupal.org/node/772446
+
+  $form['rackspace_cloud_auth_url'] = array(
+    '#type' => 'item',
+    '#title' => t('Authentication URL'),
+    '#description' => t('Select "United States" if your account was created via rackspacecloud.com. Select "United Kingdom" if your account was created via rackspace.co.uk.'),
+  );
+
+  $cf_urls = _cloud_files_auth_urls();
+  $other = variable_get('rackspace_cloud_auth_url') ? TRUE : FALSE;
+  foreach ($cf_urls as $key => $item) {
+    $form['rackspace_cloud_auth_url'][$key] = array(
+      '#type' => 'radio',
+      '#title' => $item['name'] . ' ( ' . $item['url'] . ' ) ',
+      '#default_value' => variable_get('rackspace_cloud_auth_url'),
+      '#return_value' => $item['url'],
+      '#parents' => array('rackspace_cloud_auth_url'),
+    );
+    //if this is the first one
+    if (count($form['rackspace_cloud_auth_url']) == 1) {
+      // make the style match a normal radios group.
+      $form['rackspace_cloud_auth_url'][$key]['#prefix'] = '<div class="form-radios">';
+    }
+    //if this is the value previously saved
+    if ($item['url'] == variable_get('rackspace_cloud_auth_url')) {
+        $other = FALSE;
+    }
+  }
+
+  //if other is used, reset all the default_values
+  if ($other) {
+      foreach ($cf_urls as $key => $item) {
+        $form['rackspace_cloud_auth_url'][$key]['#default_value'] = 'other';
+      }
+  }
+
+  $form['rackspace_cloud_auth_url']['other'] = array(
+    // The 'container-inline' class places elements next to each other, while the
+    // 'form-item' class provides the correct spacing between options.
+    '#prefix' => '<div class="container-inline form-item">',
+    '#suffix' => '</div>'
+  );
+
+  // By supplying the title here, instead of using the '#field_prefix' property
+  // of the textfield, clicking the text will also select the radio button.
+  $form['rackspace_cloud_auth_url']['other']['other_option'] = array(
+    '#type' => 'radio',
+    '#title' => t('Other ('),
+    '#return_value' => 'other',
+    '#default_value' => $other ? 'other' : variable_get('rackspace_cloud_auth_url'),
+    '#parents' => array('rackspace_cloud_auth_url')
+  );
+
+  $form['rackspace_cloud_auth_url']['other']['other_textfield'] = array(
+    '#type' => 'textfield',
+    '#default_value' => $other ? variable_get('rackspace_cloud_auth_url') : '',
+    '#size' => 20,         // The default size is a bit large...
+    '#suffix' => ')</div>'  // End of the "form-radios" style.
+  );
+
   $form['rackspace_cloud_username'] = array(
     '#type' => 'textfield',
     '#title' => t('Username'),
@@ -24,7 +116,7 @@ function cloud_files_admin() {
     '#default_value' => variable_get('rackspace_cloud_username'),
     '#required' => TRUE,
   );
-  
+
   $form['rackspace_cloud_api_key'] = array(
     '#type' => 'password',
     '#title' => t('API Key'),
@@ -53,7 +145,7 @@ function cloud_files_admin() {
   );
 
   //$form['#submit'][] = 'cloud_files_settings_submit';
-  
+
   return system_settings_form($form);
 }
 
@@ -69,6 +161,12 @@ function cloud_files_admin_validate($form, &$form_state) {
       $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
       $container = $form_state['values']['rackspace_cloud_container'];
 
+      //if using Other authentication URL, set its value from the text field
+      if ($form_state['values']['rackspace_cloud_auth_url'] == 'other') {
+          $form_state['values']['rackspace_cloud_auth_url'] = $form_state['values']['other_textfield'];
+      }
+      $auth_url = $form_state['values']['rackspace_cloud_auth_url'];
+
       //if API Key was left empty, use the previously saved API Key
       //with this, it wont be possible to clear the API Key, but it can be changed to something else
       //this is so the API key doesnt have to be entered every time
@@ -78,7 +176,7 @@ function cloud_files_admin_validate($form, &$form_state) {
       }
 
       try {
-        $auth = new CF_Authentication($user, $apikey);
+        $auth = new CF_Authentication($user, $apikey, NULL, $auth_url);
         # $auth->ssl_use_cabundle();  # bypass cURL's old CA bundle
         $auth->authenticate();
       } catch (AuthenticationException $e) {
@@ -144,7 +242,6 @@ function cloud_files_libraries_info() {
     ),
   );
 }
-
 
 /**
  * Implements hook_requirements().
