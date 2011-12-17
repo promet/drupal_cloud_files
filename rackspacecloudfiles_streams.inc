@@ -788,7 +788,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       $auth = new CF_Authentication(variable_get('rackspace_cloud_username'),
                                     variable_get('rackspace_cloud_api_key'),
                                     NULL,
-                                    variable_get('rackspace_cloud_cdn_domain'));
+                                    variable_get('rackspace_cloud_auth_url'));
       $auth->authenticate();
       $credentials = $auth->export_credentials();
       cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
