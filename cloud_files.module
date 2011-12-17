@@ -63,7 +63,7 @@ function cloud_files_admin() {
  * Validate Rackspace Cloud settings
  */
 function cloud_files_admin_validate($form, &$form_state) {
-  $info = libraries_load('rackspacecloud');
+  $info = libraries_load('rackspace');
   if ($info['loaded']) {
       $user = $form_state['values']['rackspace_cloud_username'];
       $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
@@ -127,7 +127,7 @@ function cloud_files_stream_wrappers() {
  */
 function cloud_files_libraries_info() {
   return array(
-    'rackspacecloud' => array(
+    'rackspace' => array(
       'title' => 'Rackspace Cloud Files PHP API',
       'vendor url' => 'https://github.com/rackspace/php-cloudfiles',
       'download url' => 'https://github.com/rackspace/php-cloudfiles',
@@ -153,7 +153,7 @@ function cloud_files_requirements() {
   $t = get_t();
   $requirements = array();
 
-  $info = libraries_load('rackspacecloud');
+  $info = libraries_load('rackspace');
   if (!$info['loaded']) {
     $requirements['cloud_files'] = array(
       'severity' => REQUIREMENT_ERROR,

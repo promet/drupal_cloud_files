@@ -2,6 +2,7 @@ CHANGELOG for Cloud Files 1 for Drupal 7
 
 Cloud Files 7.x-1.x, xxxx-xx-xx
 -------------------------------
+#1341190 by mr.moses: update Library path
 #1341266 by mr.moses: remove CDN purge from every write
 
 Cloud Files 7.x-1.0-beta2, 2011-10-29

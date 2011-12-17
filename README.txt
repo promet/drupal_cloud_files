@@ -5,8 +5,8 @@ Installation
 
 - Download Rackspace's Cloud Files PHP API binding
   (https://github.com/rackspace/php-cloudfiles/) and place it in
-  sites/all/libraries/rackspacecloud/ so that the path to cloudfiles.php is
-  sites/all/libraries/rackspacecloud/php-cloudfiles/cloudfiles.php
+  sites/all/libraries/rackspace/ so that the path to cloudfiles.php is
+  sites/all/libraries/rackspace/php-cloudfiles/cloudfiles.php
 
 - Configure your setttings at /admin/config/media/cloud-files
 
