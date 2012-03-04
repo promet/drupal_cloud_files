@@ -49,7 +49,7 @@ function _cloud_files_auth_urls() {
  */
 function cloud_files_admin() {
 
-  // radios group with an other option take from http://drupal.org/node/772446
+  // radios group with an other option taken from http://drupal.org/node/772446
 
   $form['rackspace_cloud_auth_url'] = array(
     '#type' => 'item',
@@ -109,11 +109,16 @@ function cloud_files_admin() {
     '#suffix' => ')</div>'  // End of the "form-radios" style.
   );
 
+  $rackspace_cloud_username = variable_get('rackspace_cloud_username');
+  $rackspace_cloud_api_key = variable_get('rackspace_cloud_api_key');
+  $rackspace_cloud_container = variable_get('rackspace_cloud_container');
+  $rackspace_cloud_cdn_domain = variable_get('rackspace_cloud_cdn_domain');
+  
   $form['rackspace_cloud_username'] = array(
     '#type' => 'textfield',
     '#title' => t('Username'),
     '#description' => t('Enter your Rackspace Cloud username.'),
-    '#default_value' => variable_get('rackspace_cloud_username'),
+    '#default_value' => $rackspace_cloud_username,
     '#required' => TRUE,
   );
 
@@ -121,27 +126,54 @@ function cloud_files_admin() {
     '#type' => 'password',
     '#title' => t('API Key'),
     '#description' => t('Enter your Rackspace Cloud API Key.'),
-    '#default_value' => variable_get('rackspace_cloud_api_key'),
+    '#default_value' => $rackspace_cloud_api_key,
   );
 
   $form['rackspace_cloud_container'] = array(
     '#type' => 'textfield',
     '#title' => t('Container'),
     '#description' => t('Enter your Rackspace Cloud Container name.'),
-    '#default_value' => variable_get('rackspace_cloud_container'),
+    '#default_value' => $rackspace_cloud_container,
     '#required' => TRUE,
   );
+  // if there is a username/api_key available, try to get the containers list
+  if ($rackspace_cloud_username && $rackspace_cloud_api_key) {
+    try {
+      $auth = _cloud_files_get_authentication();
+      $conn = new CF_Connection($auth);
+      $container_list = $conn->list_containers();
+      $container_options = array();
+      foreach ($container_list as $container) {
+        $container_options[$container] = $container;
+      }
+      if ($container_list) {
+        $form['rackspace_cloud_container']['#type'] = 'select';
+        $form['rackspace_cloud_container']['#options'] = $container_options;
+      }
+    } catch (Exception $e) {
+      drupal_set_message(t('Error getting container list.'), 'error');
+    }
+  }
+
+  $form['rackspace_cloud_cdn_domain'] = array(
+    '#type' => 'value',
+    '#title' => t('Domain'),
+    '#description' => t('The container domain. Enter a custom CNAME here.'),
+    '#default_value' => $rackspace_cloud_cdn_domain,
+  );
+  //if there is a domain set, allow it to be updated
+  //this is so it is first set to the container domain name
+  //but can be updated to a custom CNAME
+  if ($rackspace_cloud_cdn_domain) {
+    $form['rackspace_cloud_cdn_domain']['#type'] = 'textfield';
+    $form['rackspace_cloud_cdn_domain']['#required'] = TRUE;
+  }
 
   $form['rackspace_cloud_debug'] = array(
     '#type' => 'checkbox',
     '#title' => t('Debug'),
     '#description' => t('Check the box to enable logging.'),
     '#default_value' => variable_get('rackspace_cloud_debug'),
-  );
-
-  $form['rackspace_cloud_cdn_domain'] = array(
-    '#type' => 'value',
-    '#default_value' => variable_get('rackspace_cloud_cdn_domain'),
   );
 
   //$form['#submit'][] = 'cloud_files_settings_submit';
@@ -170,7 +202,7 @@ function cloud_files_admin_validate($form, &$form_state) {
       //if API Key was left empty, use the previously saved API Key
       //with this, it wont be possible to clear the API Key, but it can be changed to something else
       //this is so the API key doesnt have to be entered every time
-      //if you are changing container, or debug mode
+      //if you are changing another setting like container, or debug mode
       if (!$form_state['values']['rackspace_cloud_api_key']) {
         $form_state['values']['rackspace_cloud_api_key'] = $apikey;
       }
@@ -178,9 +210,17 @@ function cloud_files_admin_validate($form, &$form_state) {
       try {
         $auth = new CF_Authentication($user, $apikey, NULL, $auth_url);
         # $auth->ssl_use_cabundle();  # bypass cURL's old CA bundle
-        $auth->authenticate();
+        if ($auth->authenticate()) {
+          //if authentication passed, save these variables now
+          //so if container is incorrect, we can still fetch container list
+          variable_set('rackspace_cloud_username',$user);
+          variable_set('rackspace_cloud_api_key',$apikey);
+          variable_set('rackspace_cloud_auth_url',$auth_url);
+        }
       } catch (AuthenticationException $e) {
         form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
+      } catch (Exception $e) {
+        form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Error authenticating. Please check the Username and/or API Key.'));
       }
       try {
         $conn = new CF_Connection($auth);
@@ -256,7 +296,7 @@ function cloud_files_requirements() {
       'severity' => REQUIREMENT_ERROR,
       'title' => $t('Rackspace Cloud Files PHP API'),
       'value' => $t('Failed to load the Rackspace Cloud Files PHP API'),
-      'description' => $t('Please make sure the Rackspace Cloud Files PHP API library is installed in the libraries directory.'),
+      'description' => $t('Please make sure the Rackspace Cloud Files PHP API library is installed in the libraries directory (libraries\rackspace\php-cloudfiles).'),
     );
   }
   else {
@@ -268,4 +308,33 @@ function cloud_files_requirements() {
   }
 
   return $requirements;
+}
+
+function _cloud_files_get_authentication() {
+  $credentials = cache_get("rackspace_cloud_credentials");
+
+  if ($credentials) {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
+    }
+    $auth_token = $credentials->data['auth_token'];
+    $storage_url = $credentials->data['storage_url'];
+    $cdnm_url = $credentials->data['cdnm_url'];
+
+    $auth = new CF_Authentication();
+    $auth->load_cached_credentials($auth_token, $storage_url, $cdnm_url);
+  }
+  else {
+    if (variable_get('rackspace_cloud_debug')) {
+      watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
+    }
+    $auth = new CF_Authentication(variable_get('rackspace_cloud_username'),
+                                  variable_get('rackspace_cloud_api_key'),
+                                  NULL,
+                                  variable_get('rackspace_cloud_auth_url'));
+    $auth->authenticate();
+    $credentials = $auth->export_credentials();
+    cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
+  }
+  return $auth;
 }

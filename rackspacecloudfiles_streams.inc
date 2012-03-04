@@ -137,27 +137,33 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
 
     $target = file_uri_target($this->uri);
+    $path = explode("/", $target);
 
-    if (!isset($this->object)) {
+    // if its a request for styles, need to check if it exists
+    if ($path[0] == 'styles') {
+      if (!isset($this->object)) {
         if (!isset($this->container)) {
-            $this->getContainer();
+          $this->getContainer();
         }
 
+        //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
         try{
           $this->object = $this->container->get_object($target);
         } catch (NoSuchObjectException $e) {
-              // Image styles support
-              // image is generated when its first requested, so serve from the private file system
-              // this will save the file to rackspace and it'll exist next and wont error into this
-              $path = explode('/', $this->getLocalPath());
-              if ($path[0] == 'styles') {
-                array_shift($path);
-                return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
-              }
+          // Image styles support
+          // image is generated when its first requested, so serve from the private file system
+          // this will save the file to rackspace and it'll exist next and wont error into this
+          $path = explode('/', $this->getLocalPath());
+          if ($path[0] == 'styles') {
+            array_shift($path);
+            return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
+          }
         }
+      }
     }
 
-    return $this->object->public_uri();
+    $url = 'http://' . variable_get('rackspace_cloud_cdn_domain') . '/' . $target;
+    return $url;
   }
 
   /**
@@ -768,31 +774,6 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   }
 
   public function getAuthentication() {
-    $credentials = cache_get("rackspace_cloud_credentials");
-
-    if ($credentials) {
-      if (variable_get('rackspace_cloud_debug')) {
-        watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
-      }
-      $auth_token = $credentials->data['auth_token'];
-      $storage_url = $credentials->data['storage_url'];
-      $cdnm_url = $credentials->data['cdnm_url'];
-
-      $auth = new CF_Authentication();
-      $auth->load_cached_credentials($auth_token, $storage_url, $cdnm_url);
-    }
-    else {
-      if (variable_get('rackspace_cloud_debug')) {
-        watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
-      }
-      $auth = new CF_Authentication(variable_get('rackspace_cloud_username'),
-                                    variable_get('rackspace_cloud_api_key'),
-                                    NULL,
-                                    variable_get('rackspace_cloud_auth_url'));
-      $auth->authenticate();
-      $credentials = $auth->export_credentials();
-      cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
-    }
-    return $auth;
+    return _cloud_files_get_authentication();
   }
 }
