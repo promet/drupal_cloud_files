@@ -158,7 +158,7 @@ function cloud_files_admin() {
   $form['rackspace_cloud_cdn_domain'] = array(
     '#type' => 'value',
     '#title' => t('Domain'),
-    '#description' => t('The container domain. Enter a custom CNAME here.'),
+    '#description' => t('The container domain. Enter a custom CNAME here. Leave this empty to get the default domain of the selected container.'),
     '#default_value' => $rackspace_cloud_cdn_domain,
   );
   //if there is a domain set, allow it to be updated
@@ -189,39 +189,43 @@ function cloud_files_admin() {
 function cloud_files_admin_validate($form, &$form_state) {
   $info = libraries_load('rackspace');
   if ($info['loaded']) {
-      $user = $form_state['values']['rackspace_cloud_username'];
-      $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
-      $container = $form_state['values']['rackspace_cloud_container'];
+    $user = $form_state['values']['rackspace_cloud_username'];
+    $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
+    $container = $form_state['values']['rackspace_cloud_container'];
+    $rackspace_cloud_cdn_domain = $form_state['values']['rackspace_cloud_cdn_domain'];
 
-      //if using Other authentication URL, set its value from the text field
-      if ($form_state['values']['rackspace_cloud_auth_url'] == 'other') {
-          $form_state['values']['rackspace_cloud_auth_url'] = $form_state['values']['other_textfield'];
-      }
-      $auth_url = $form_state['values']['rackspace_cloud_auth_url'];
+    //if using Other authentication URL, set its value from the text field
+    if ($form_state['values']['rackspace_cloud_auth_url'] == 'other') {
+        $form_state['values']['rackspace_cloud_auth_url'] = $form_state['values']['other_textfield'];
+    }
+    $auth_url = $form_state['values']['rackspace_cloud_auth_url'];
 
-      //if API Key was left empty, use the previously saved API Key
-      //with this, it wont be possible to clear the API Key, but it can be changed to something else
-      //this is so the API key doesnt have to be entered every time
-      //if you are changing another setting like container, or debug mode
-      if (!$form_state['values']['rackspace_cloud_api_key']) {
-        $form_state['values']['rackspace_cloud_api_key'] = $apikey;
-      }
+    //if API Key was left empty, use the previously saved API Key
+    //with this, it wont be possible to clear the API Key, but it can be changed to something else
+    //this is so the API key doesnt have to be entered every time
+    //if you are changing another setting like container, or debug mode
+    if (!$form_state['values']['rackspace_cloud_api_key']) {
+      $form_state['values']['rackspace_cloud_api_key'] = $apikey;
+    }
 
-      try {
-        $auth = new CF_Authentication($user, $apikey, NULL, $auth_url);
-        # $auth->ssl_use_cabundle();  # bypass cURL's old CA bundle
-        if ($auth->authenticate()) {
-          //if authentication passed, save these variables now
-          //so if container is incorrect, we can still fetch container list
-          variable_set('rackspace_cloud_username',$user);
-          variable_set('rackspace_cloud_api_key',$apikey);
-          variable_set('rackspace_cloud_auth_url',$auth_url);
-        }
-      } catch (AuthenticationException $e) {
-        form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
-      } catch (Exception $e) {
-        form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Error authenticating. Please check the Username and/or API Key.'));
+    try {
+      $auth = new CF_Authentication($user, $apikey, NULL, $auth_url);
+      # $auth->ssl_use_cabundle();  # bypass cURL's old CA bundle
+      if ($auth->authenticate()) {
+        //if authentication passed, save these variables now
+        //so if container is incorrect, we can still fetch container list
+        variable_set('rackspace_cloud_username',$user);
+        variable_set('rackspace_cloud_api_key',$apikey);
+        variable_set('rackspace_cloud_auth_url',$auth_url);
       }
+    } catch (AuthenticationException $e) {
+      form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
+    } catch (Exception $e) {
+      form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Error authenticating. Please check the Username and/or API Key.'));
+    }
+
+    //if there is not a domain set, get the container domain
+    if (!$rackspace_cloud_cdn_domain) {
       try {
         $conn = new CF_Connection($auth);
         $container = $conn->get_container($container);
@@ -229,6 +233,7 @@ function cloud_files_admin_validate($form, &$form_state) {
       } catch (Exception $e) {
         form_set_error('rackspace_cloud_container', t('Container does not exist.'));
       }
+    }
   }
   else {
     form_set_error('', t('The Rackspace Cloud Files API was not loaded.'));
