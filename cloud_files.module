@@ -317,11 +317,25 @@ function cloud_files_requirements() {
 
 function _cloud_files_get_authentication() {
   $credentials = cache_get("rackspace_cloud_credentials");
-
+  
+  if ($credentials) {      
+    //check to make sure the credentials are less than 1 day old
+    $created = new DateTime(date("r", $credentials->created));
+    $now = new DateTime();
+    $age = $now->diff($created);
+    if ($age->d > 0) {
+      if (variable_get('rackspace_cloud_debug')) {
+        watchdog("cloud_files", "credentials are too old", NULL, WATCHDOG_DEBUG);
+      }
+      $credentials = NULL;
+    }
+  }
+    
   if ($credentials) {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
     }
+    
     $auth_token = $credentials->data['auth_token'];
     $storage_url = $credentials->data['storage_url'];
     $cdnm_url = $credentials->data['cdnm_url'];
@@ -339,6 +353,7 @@ function _cloud_files_get_authentication() {
                                   variable_get('rackspace_cloud_auth_url'));
     $auth->authenticate();
     $credentials = $auth->export_credentials();
+    
     cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
   }
   return $auth;
