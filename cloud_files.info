@@ -9,4 +9,4 @@ files[] = rackspacecloudfiles_streams.inc
 
 configure = admin/config/media/cloud-files
 
-dependencies[] = libraries
+dependencies[] = libraries (2.x)
