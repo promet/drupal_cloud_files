@@ -141,22 +141,31 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     // if its a request for styles, need to check if it exists
     if ($path[0] == 'styles') {
-      if (!isset($this->object)) {
-        if (!isset($this->container)) {
-          $this->getContainer();
-        }
+      
+      //get fileinfo from the database
+      $fileinfo = $this->get_fileinfo($this->uri);
 
-        //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
-        try{
-          $this->object = $this->container->get_object($target);
-        } catch (NoSuchObjectException $e) {
-          // Image styles support
-          // image is generated when its first requested, so serve from the private file system
-          // this will save the file to rackspace and it'll exist next and wont error into this
-          $path = explode('/', $this->getLocalPath());
-          if ($path[0] == 'styles') {
-            array_shift($path);
-            return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
+      // if file does not exist in the database (its probably new)
+      if(!$fileinfo) {
+        //attempt to get file from Rackspace        
+        
+        if (!isset($this->object)) {
+          if (!isset($this->container)) {
+            $this->getContainer();
+          }
+
+          //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
+          try{
+            $this->object = $this->container->get_object($target);
+          } catch (NoSuchObjectException $e) {
+            // Image styles support
+            // image is generated when its first requested, so serve from the private file system
+            // this will save the file to rackspace and it'll exist next and wont error into this
+            $path = explode('/', $this->getLocalPath());
+            if ($path[0] == 'styles') {
+              array_shift($path);
+              return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
+            }
           }
         }
       }
@@ -397,6 +406,8 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
     if ($this->write) {
         $this->object->write($this->stream_data);
+        
+        $this->add_fileinfo($this->uri, $this->object->content_type, strlen($this->stream_data));
     }
     //$this->object = NULL;
     $this->stream_data = NULL;
@@ -473,7 +484,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (!isset($this->container)) {
         $this->getContainer();
     }
-    return $this->container->delete_object($this->getLocalPath($uri));
+    if ($this->container->delete_object($this->getLocalPath($uri))) {
+      $this->remove_fileinfo($this->uri);
+      return TRUE;
+    }
+    return FALSE;
   }
 
   /**
@@ -521,49 +536,59 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if ($uri == NULL) {
       $uri = $this->uri;
     }
+    $this->uri = $uri;
+    
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "Checking file status (url_stat) %file", array('%file' => $uri), WATCHDOG_DEBUG);
     }
 
-    $return = FALSE; // Default to fail.
+    $stat = FALSE; // Default to fail.
     $mode = 0;
+    
+    $target = $this->getLocalPath($this->uri);
+    
+    $fileinfo = $this->get_fileinfo($this->uri);
 
-    $this->uri = $uri;
-    $target = $this->getLocalPath($uri);
-
-    if (!isset($this->object)) {
-        if (!isset($this->container)) {
-            $this->getContainer();
-        }
-    }
-
-    //check if the file exists
-    $objexists = TRUE;
-    try{
-      if (!empty($target)) {
-        $this->object = $this->container->get_object($target);
+    // if file does not exist in the database (its probably new)
+    // try to get it from Rackspace
+    if(!$fileinfo) {      
+      if (!isset($this->object)) {
+          if (!isset($this->container)) {
+              $this->getContainer();
+          }
       }
-    } catch (NoSuchObjectException $e) {
-      //$file = $cont->create_object($target);
-      $objexists = FALSE;
+
+      //check if the file exists
+      $objexists = TRUE;
+      try{
+        if (!empty($target)) {
+          $this->object = $this->container->get_object($target);
+          $filemime = $this->object->content_type;
+          $filesize = $this->object->content_length;
+        }
+      } catch (NoSuchObjectException $e) {
+        //$file = $cont->create_object($target);
+        $objexists = FALSE;
+      }
+    }
+    else {
+      // fileinfo exists in the database
+      $objexists = TRUE;
+      $filemime = $fileinfo['filemime'];
+      $filesize = $fileinfo['filesize'];
     }
 
     if ($objexists) {
       //if the target is empty, its the root of the container (counts as a directory)
-      if (empty($target) || $this->object->content_type == "application/directory") {
+      if (empty($target) || $filemime == "application/directory") {
         $mode = 0040000; // S_IFDIR means it's a directory.
       }
       else {
         $mode = 0100000; // S_IFREG, means it's a file.
       }
       if ($mode) {
-        $size = 0;
-        if ($mode == 0100000) {
-          $size = $this->object->content_length;
-        }
-
         $mode |= 0777;
-        $return = array(
+        $stat = array(
           'dev' => 0,
           'ino' => 0,
           'mode' => $mode,
@@ -571,7 +596,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
           'uid' => 0,
           'gid' => 0,
           'rdev' => 0,
-          'size' => $size,
+          'size' => $filesize,
           'atime' => 0,
           'mtime' => 0,
           'ctime' => 0,
@@ -581,7 +606,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       }
     }
 
-    return $return;
+    return $stat;
   }
 
   /**
@@ -649,6 +674,20 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       //this expects the a full path to a file
       //so add a file name to create all directories (wont create MKDIR.txt)
       $this->container->create_paths($target . '/MKDIR.txt');
+      
+      // add each directory to the database
+      $dirs = explode('/', $target);
+      $build_path = "";
+      foreach ($dirs as $dir) {
+        if (!$build_path) {
+          $build_path = $dir;
+        } else {
+          $build_path .= "/" . $dir;
+        }
+        $this->add_fileinfo("rcf://" . $build_path, "application/directory", 1);
+      }
+      
+      
     }
 
     return TRUE;
@@ -760,7 +799,31 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     return "http://" . variable_get('rackspace_cloud_cdn_domain');
   }
-
+  
+  public function add_fileinfo($uri, $filemime, $filesize) {
+    // add file info to database
+    $new_file = new stdClass();
+    $new_file->uri = $uri;
+    $new_file->filemime = $filemime;
+    $new_file->filesize = $filesize;        
+    drupal_write_record('cloud_files', $new_file);
+  }
+  
+  public function get_fileinfo($uri) {
+    $query = db_select('cloud_files', 'cf');
+    $query
+      ->condition('uri', $uri)
+      ->fields('cf', array('uri', 'filemime', 'filesize'));
+    $result = $query->execute();
+    return $result->fetchAssoc();
+  }
+  
+  public function remove_fileinfo($uri) {
+    return db_delete('cloud_files')
+      ->condition('uri', $uri)
+      ->execute();
+  }
+  
   public function getContainer() {
     libraries_load('rackspace');
     $auth = $this->getAuthentication();
