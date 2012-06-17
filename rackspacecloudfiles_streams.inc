@@ -137,36 +137,36 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
 
     $target = file_uri_target($this->uri);
-    $path = explode("/", $target);
-
-    // if its a request for styles, need to check if it exists
-    if ($path[0] == 'styles') {
       
-      //get fileinfo from the database
-      $fileinfo = $this->get_fileinfo($this->uri);
+    //get fileinfo from the database
+    $fileinfo = $this->get_fileinfo($this->uri);
 
-      // if file does not exist in the database (its probably new)
-      if(!$fileinfo) {
-        //attempt to get file from Rackspace        
-        
-        if (!isset($this->object)) {
-          if (!isset($this->container)) {
-            $this->getContainer();
-          }
+    // if file does not exist in the database (its probably new)
+    if(!$fileinfo) {
+      
+      //attempt to get file from Rackspace        
 
-          //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
-          try{
-            $this->object = $this->container->get_object($target);
-          } catch (NoSuchObjectException $e) {
-            // Image styles support
-            // image is generated when its first requested, so serve from the private file system
-            // this will save the file to rackspace and it'll exist next and wont error into this
-            $path = explode('/', $this->getLocalPath());
-            if ($path[0] == 'styles') {
-              array_shift($path);
-              return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
-            }
-          }
+      if (!isset($this->container)) {
+        $this->getContainer();
+      }
+
+      //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
+      try{
+        $this->object = $this->container->get_object($target);
+
+        // file does exist!  add file info to the database
+        $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
+      } catch (NoSuchObjectException $e) {
+        // Image styles support
+        // image is generated when its first requested, so serve from the private file system
+        // this will save the file to rackspace and it'll exist next and wont error into this
+        $path = explode('/', $this->getLocalPath());
+        if ($path[0] == 'styles') {
+          array_shift($path);
+          return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
+        } else {
+          //file does not exist in rackspace
+          watchdog('cloud_files', t('File not found: @target'), array('@target' => $target), WATCHDOG_ERROR);
         }
       }
     }
@@ -407,7 +407,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if ($this->write) {
         $this->object->write($this->stream_data);
         
-        $this->add_fileinfo($this->uri, $this->object->content_type, strlen($this->stream_data));
+        $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
     }
     //$this->object = NULL;
     $this->stream_data = NULL;
@@ -485,6 +485,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
         $this->getContainer();
     }
     if ($this->container->delete_object($this->getLocalPath($uri))) {
+      // remove file from database
       $this->remove_fileinfo($this->uri);
       return TRUE;
     }
@@ -551,7 +552,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     // if file does not exist in the database (its probably new)
     // try to get it from Rackspace
-    if(!$fileinfo) {      
+    if(!$fileinfo) {
       if (!isset($this->object)) {
           if (!isset($this->container)) {
               $this->getContainer();
@@ -565,6 +566,9 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
           $this->object = $this->container->get_object($target);
           $filemime = $this->object->content_type;
           $filesize = $this->object->content_length;
+          
+          // file does exist!  add file info to the daabase
+          $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
         }
       } catch (NoSuchObjectException $e) {
         //$file = $cont->create_object($target);
@@ -686,8 +690,6 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
         }
         $this->add_fileinfo("rcf://" . $build_path, "application/directory", 1);
       }
-      
-      
     }
 
     return TRUE;
