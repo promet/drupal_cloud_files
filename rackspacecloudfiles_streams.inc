@@ -480,11 +480,22 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing unlink", NULL, WATCHDOG_DEBUG);
     }
+    
+    $this->uri = $uri;
 
     if (!isset($this->container)) {
         $this->getContainer();
     }
-    if ($this->container->delete_object($this->getLocalPath($uri))) {
+    
+    $deleted = FALSE;
+    $doesnotexist = FALSE;
+    try {
+      $deleted = $this->container->delete_object($this->getLocalPath($this->uri));
+    } catch (NoSuchObjectException $e) {
+      $doesnotexist = TRUE;
+    }
+    
+    if ($deleted || $doesnotexist) {
       // remove file from database
       $this->remove_fileinfo($this->uri);
       return TRUE;
