@@ -556,13 +556,13 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     $stat = FALSE; // Default to fail.
     $mode = 0;
-	
-	if(empty($target)) {
-		$fileinfo = array('filemime'=>'application/directory','filesize'=>1);
-	} else {
-		$fileinfo = $this->get_fileinfo($this->uri);
-	}
-
+    
+    if(empty($target)) {
+      $fileinfo = array('filemime'=>'application/directory','filesize'=>1);
+    } else {
+      $fileinfo = $this->get_fileinfo($this->uri);
+    }
+    
     // if file does not exist in the database (its probably new)
     // try to get it from Rackspace
     if(!$fileinfo) {
@@ -575,17 +575,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       //check if the file exists
       $objexists = TRUE;
       try{
-        if (empty($target)) {
-          $filemime = "application/directory";
-          $filesize = 1;
-        }
-        else {
-          $this->object = $this->container->get_object($target);
-          $filemime = $this->object->content_type;
-          $filesize = $this->object->content_length;
-        }
+        $this->object = $this->container->get_object($target);
+        $filemime = $this->object->content_type;
+        $filesize = $this->object->content_length;
         
-        // file does exist!  add file info to the daabase
+        // file does exist!  add file info to the database
         $this->add_fileinfo($this->uri, $filemime, $filesize);
       } catch (NoSuchObjectException $e) {
         //$file = $cont->create_object($target);
