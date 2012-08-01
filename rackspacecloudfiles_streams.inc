@@ -556,10 +556,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     $stat = FALSE; // Default to fail.
     $mode = 0;
-    
-    $target = $this->getLocalPath($this->uri);
-    
-    $fileinfo = $this->get_fileinfo($this->uri);
+	
+	if(empty($target)) {
+		$fileinfo = array('filemime'=>'application/directory','filesize'=>1);
+	} else {
+		$fileinfo = $this->get_fileinfo($this->uri);
+	}
 
     // if file does not exist in the database (its probably new)
     // try to get it from Rackspace
