@@ -575,14 +575,18 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       //check if the file exists
       $objexists = TRUE;
       try{
-        if (!empty($target)) {
+        if (empty($target)) {
+          $filemime = "application/directory";
+          $filesize = 1;
+        }
+        else {
           $this->object = $this->container->get_object($target);
           $filemime = $this->object->content_type;
           $filesize = $this->object->content_length;
-          
-          // file does exist!  add file info to the daabase
-          $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
         }
+        
+        // file does exist!  add file info to the daabase
+        $this->add_fileinfo($this->uri, $filemime, $filesize);
       } catch (NoSuchObjectException $e) {
         //$file = $cont->create_object($target);
         $objexists = FALSE;
@@ -597,7 +601,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     if ($objexists) {
       //if the target is empty, its the root of the container (counts as a directory)
-      if (empty($target) || $filemime == "application/directory") {
+      if ($filemime == "application/directory") {
         $mode = 0040000; // S_IFDIR means it's a directory.
       }
       else {
