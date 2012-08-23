@@ -1,7 +1,15 @@
 CHANGELOG for Cloud Files 1 for Drupal 7
 
-Cloud Files 7.x-1.1, xxxx-xx-xx
+Cloud Files 7.x-1.x, 2012-08-22
 -------------------------------
+Issue #1549490 by mr.moses: added url_stat indexes, fixed to use correct $target
+by mr.moses: hardcode fileinfo for empty target (directory)
+by mr.moses: handle deleting file that doesnt exist remotely
+by mr.moses: fix for using empty target as a directory
+by mr.moses: added lazy import of existing remote files into file info cache
+Issue #1325520, #1372842 by mr.moses: added file info caching table
+by mr.moses: added version to libraries dependency
+Issue #1338794 by mr.moses: verify that credentials are less than 1 day old
 Issue #1416284 by mr.moses: added CNAME support
 Issue #1325520 by mr.moses: only check for object if its a style
 Issue #1372842 by mr.moses: minimize external requests in getExternalUrl

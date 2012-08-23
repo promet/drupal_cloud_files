@@ -545,10 +545,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    * @see http://php.net/manual/en/streamwrapper.url-stat.php
    */
   public function url_stat($uri, $flags) {
-    if ($uri == NULL) {
+    if(!isset($uri)) {
       $uri = $this->uri;
     }
     $this->uri = $uri;
+    
+    $target  = $this->getTarget($this->uri);
     
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "Checking file status (url_stat) %file", array('%file' => $uri), WATCHDOG_DEBUG);
@@ -601,22 +603,37 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       else {
         $mode = 0100000; // S_IFREG, means it's a file.
       }
+
       if ($mode) {
         $mode |= 0777;
+
         $stat = array(
           'dev' => 0,
+          '0' => 0,
           'ino' => 0,
+          '1' => 0,
           'mode' => $mode,
+          '2' => $mode,
           'nlink' => 0,
+          '3' => 0,
           'uid' => 0,
+          '4' => 0,
           'gid' => 0,
+          '5' => 0,
           'rdev' => 0,
+          '6' => 0,
           'size' => $filesize,
+          '7' => $filesize,
           'atime' => 0,
+          '8' => 0,
           'mtime' => 0,
+          '9' => 0,
           'ctime' => 0,
+          '10' => 0,
           'blksize' => 0,
+          '11' => 0,
           'blocks' => 0,
+          '12' => 0,
         );
       }
     }
