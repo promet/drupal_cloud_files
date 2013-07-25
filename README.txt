@@ -3,10 +3,9 @@ Installation
 - Download and install the Libraries (7.x-2.x branch) module
   http://drupal.org/project/libraries
 
-- Download Rackspace's Cloud Files PHP API binding
-  (https://github.com/rackspace/php-cloudfiles/) and place it in
-  sites/all/libraries/rackspace/ so that the path to cloudfiles.php is
-  sites/all/libraries/rackspace/php-cloudfiles/cloudfiles.php
+- Download the PHP SDK for OpenStack/Rackspace APIs (http://php-opencloud.com/)
+  and place it in sites/all/libraries/php-opencloud/ so that the path to
+  php-opencloud.php is sites/all/libraries/php-opencloud/lib/php-opencloud.php
 
 - Configure your setttings at /admin/config/media/cloud-files
 
