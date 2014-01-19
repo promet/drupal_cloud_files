@@ -152,11 +152,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
       //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
       try{
-        $this->object = $this->container->DataObject($target);
+        $this->object = $this->container->dataObject($target);
 
         // file does exist!  add file info to the database
-        $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
-      } catch (OpenCloud\Common\Exceptions\ObjFetchError $e) {
+        $this->add_fileinfo($this->uri, $this->object->getContentType(), $this->object->getContentLength());
+      } catch (Exception $e) {
         // Image styles support
         // image is generated when its first requested, so serve from the private file system
         // this will save the file to rackspace and it'll exist next and wont error into this
@@ -232,8 +232,8 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     try{
       // This will load the object if it exists, errors if it doesn't exist.
-      $this->object = $this->container->DataObject($target);
-    } catch (OpenCloud\Common\Exceptions\ObjFetchError $e) {
+      $this->object = $this->container->dataObject($target);
+    } catch (Exception $e) {
       // say stream is open even if this doesnt exist (to write to)
     }
 
@@ -282,9 +282,9 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
             if (!isset($this->container)) {
                 $this->getContainer();
             }
-            $this->object = $this->container->DataObject($target);
+            $this->object = $this->container->dataObject($target);
         }
-        $this->stream_data = $this->object->SaveToString();
+        $this->stream_data = $this->object->getContent();
         //$temp = fopen("temporary://testfile","w");
         //$this->stream_data = $object->stream($temp);
         //fclose($temp);
@@ -333,9 +333,9 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
             if (!isset($this->container)) {
                 $this->getContainer();
             }
-            $this->object = $this->container->DataObject(file_uri_target($this->uri));
+            $this->object = $this->container->dataObject(file_uri_target($this->uri));
         }
-        $this->stream_data = $this->object->SaveToString();
+        $this->stream_data = $this->object->getContent();
         //$temp = fopen("temporary://testfile","w");
         //$this->stream_data = $object->stream($temp);
         //fclose($temp);
@@ -403,22 +403,20 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
         try{
           // File may not exist yet.
-          $this->object = $this->container->DataObject($target);
-        } catch (OpenCloud\Common\Exceptions\ObjFetchError $e) {
+          $this->object = $this->container->dataObject($target);
+        } catch (Exception $e) {
           // Create new file if file does not exist.
-          $this->object = $this->container->DataObject();
+          $this->object = $this->container->dataObject();
+          $this->object->setName($target);
+          // Let Drupal guess the mime type
+          $this->object->setContentType($this->getMimeType($this->uri));
         }
     }
     if ($this->write) {
-      $this->object->SetData($this->stream_data);
-      // Let Drupal guess the mime type because php-opencloud only guesses mime
-      // type if loading from a specified file.
-      $this->object->Create(array(
-        'name' => $target,
-        'content_type' => $this->getMimeType($this->uri))
-      );
+      $this->object->setContent($this->stream_data);
+      $this->object->update();
 
-      $this->add_fileinfo($this->uri, $this->object->content_type, $this->object->content_length);
+      $this->add_fileinfo($this->uri, $this->object->getContentType(), $this->object->getContentLength());
     }
     //$this->object = NULL;
     $this->stream_data = NULL;
@@ -504,9 +502,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     $doesnotexist = FALSE;
     try {
       // dont put name here becuase it will fetch the object
-      $obj = $this->container->DataObject();
+      $obj = $this->container->dataObject();
       // delete by name, without fetching the object
-      $deleted = $obj->Delete(array('name' => $target));
+      $obj->setName($target);
+      $deleted = $obj->delete();
     } catch (NoSuchObjectException $e) {
       $doesnotexist = TRUE;
     }
@@ -593,13 +592,13 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       //check if the file exists
       $objexists = TRUE;
       try{
-        $this->object = $this->container->DataObject($target);
-        $filemime = $this->object->content_type;
-        $filesize = $this->object->content_length;
+        $this->object = $this->container->dataObject($target);
+        $filemime = $this->object->getContentType();
+        $filesize = $this->object->getContentLength();
         
         // file does exist!  add file info to the database
         $this->add_fileinfo($this->uri, $filemime, $filesize);
-      } catch (OpenCloud\Common\Exceptions\ObjFetchError $e) {
+      } catch (Exception $e) {
         //$file = $cont->create_object($target);
         $objexists = FALSE;
       }
@@ -727,15 +726,34 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
         } else {
           $build_path .= "/" . $dir;
         }
-
-        $obj = $this->container->DataObject();
-        $obj->Create(array(
-          'name' => $build_path,
-          'content_type' => 'application/directory')
-        );
         
-        // add to database
-        $this->add_fileinfo("rcf://" . $build_path, "application/directory", 1);
+        $objexists = TRUE;
+        // check if this dir already exists
+        $fileinfo = $this->get_fileinfo('rcf://' . $build_path);
+        if(!$fileinfo) {
+          // doesnt exist in db, check cloud files
+          try{
+            $this->object = $this->container->dataObject($build_path);
+            // file does exist!  add file info to the database
+            $this->add_fileinfo('rcf://' . $build_path, 'application/directory', 1);
+          } catch (Exception $e) {
+            // not in cloud files either, create it
+            $objexists = FALSE;
+          }
+        }
+        
+        if(!$objexists) {
+          $info = new stdClass();
+          $info->subdir = $build_path;
+          //$info->content_type = 'application/directory';
+          $obj = $this->container->dataObject($info);
+          $obj->setContentType('application/directory');
+          $obj->setContent('');
+          $obj->update();
+        
+          // add to database
+          $this->add_fileinfo("rcf://" . $build_path, "application/directory", 1);
+        }
       }
     }
 
@@ -876,17 +894,17 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   public function getContainer() {
     libraries_load('php-opencloud');
 
-    $conn = $this->getAuthentication();
-    $objstore = $conn->ObjectStore('cloudFiles', variable_get('rackspace_cloud_region'));
+    $client = $this->getClient();
+    $objectStoreService = $client->objectStoreService('cloudFiles', variable_get('rackspace_cloud_region'));
 
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "requesting container from Rackspace (%container)", array('%container' => variable_get('rackspace_cloud_container')), WATCHDOG_DEBUG);
     }
 
-    $this->container = $objstore->Container(variable_get('rackspace_cloud_container'));
+    $this->container = $objectStoreService->getContainer(variable_get('rackspace_cloud_container'));
   }
 
-  public function getAuthentication() {
-    return _cloud_files_get_authentication();
+  public function getClient() {
+    return _cloud_files_get_client();
   }
 }

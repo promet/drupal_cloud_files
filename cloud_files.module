@@ -31,11 +31,11 @@ function _cloud_files_auth_urls() {
     return array(
       'us' => array(
         'name' => t('United States'),
-        'url' => RACKSPACE_US,
+        'url' => OpenCloud\Rackspace::US_IDENTITY_ENDPOINT,
       ),
       'gb' => array(
         'name' => t('United Kingdom'),
-        'url' => RACKSPACE_UK,
+        'url' => OpenCloud\Rackspace::UK_IDENTITY_ENDPOINT,
       ),
     );
   }
@@ -213,9 +213,9 @@ function cloud_files_admin() {
   // if there is a username/api_key available, try to get the containers list
   if ($rackspace_cloud_username && $rackspace_cloud_api_key) {
     try {
-      $conn = _cloud_files_get_authentication();
-      $objstore = $conn->ObjectStore('cloudFiles', $rackspace_cloud_region);
-      $container_list = $objstore->ContainerList();
+      $client = _cloud_files_get_client();
+      $objectStoreService = $client->objectStoreService('cloudFiles', $rackspace_cloud_region);
+      $container_list = $objectStoreService->listContainers();
       $container_options = array();
       while($container = $container_list->Next()) {
         $container_options[$container->name] = $container->name;
@@ -274,7 +274,7 @@ function cloud_files_admin_validate($form, &$form_state) {
     }
     $auth_url = $form_state['values']['rackspace_cloud_auth_url'];
 
-    //if using Other authentication URL, set its value from the text field
+    //if using Other region, set its value from the text field
     if ($form_state['values']['rackspace_cloud_region'] == 'other') {
         $form_state['values']['rackspace_cloud_region'] = $form_state['values']['other_region_textfield'];
     }
@@ -289,20 +289,18 @@ function cloud_files_admin_validate($form, &$form_state) {
     }
 
     try {
-      $conn = new \OpenCloud\Rackspace(
-       $auth_url,
-	    array(
-	      'username' => $user,
-	      'apiKey' => $apikey
-	    )
-      );
-      $conn->Authenticate();
-
+      $client = new OpenCloud\Rackspace($auth_url, array(
+        'username' => $user,
+        'apiKey' => $apikey
+      ));
+      $client->authenticate();
+      
       // if authentication didn't error, assume it succeeded, save variables now
       // so if container is incorrect, we can still fetch container list
       variable_set('rackspace_cloud_username',$user);
       variable_set('rackspace_cloud_api_key',$apikey);
       variable_set('rackspace_cloud_auth_url',$auth_url);
+      variable_set('rackspace_cloud_region',$region);
 
     } catch (OpenCloud\Common\Exceptions\HttpUnauthorizedError $e) {
       form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
@@ -313,9 +311,9 @@ function cloud_files_admin_validate($form, &$form_state) {
     //if there is not a domain set, get the container domain
     if (!$rackspace_cloud_cdn_domain) {
       try {
-        $objstore = $conn->ObjectStore('cloudFiles', $region);
-	$container = $objstore->Container($container);
-        $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->PublicURL());
+        $objectStoreService = $client->objectStoreService('cloudFiles', $region);
+        $container = $objectStoreService->getContainer($container);
+        $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->getCdn()->getCdnUri());
       } catch (Exception $e) {
         form_set_error('rackspace_cloud_container', t('Container does not exist.'));
       }
@@ -357,16 +355,17 @@ function cloud_files_stream_wrappers() {
 function cloud_files_libraries_info() {
   return array(
     'php-opencloud' => array(
-      'title' => 'PHP SDK for OpenStack/Rackspace APIs',
+      'name' => 'PHP SDK for OpenStack/Rackspace APIs',
       'vendor url' => 'http://php-opencloud.com/',
       'download url' => 'http://php-opencloud.com/',
       'version arguments' => array(
-        'file' => 'RELEASENOTES.md',
-        'pattern' => '/[#]* [\d\/]* Version ([\d.]*)/',
+        'file' => 'vendor/rackspace/php-opencloud/lib/OpenCloud/Version.php',
+        'pattern' => "/    const VERSION = '([\d.]*)'/",
+        'lines' => 100
       ),
       'files' => array(
         'php' => array(
-          'lib/php-opencloud.php',
+          'vendor/autoload.php',
         ),
       ),
     ),
@@ -400,15 +399,11 @@ function cloud_files_requirements() {
   return $requirements;
 }
 
-function _cloud_files_get_authentication() {
-
-  $connection = new \OpenCloud\Rackspace(
-    variable_get('rackspace_cloud_auth_url'),
-    array(
-      'username' => variable_get('rackspace_cloud_username'),
-      'apiKey' => variable_get('rackspace_cloud_api_key')
-    )
-  );
+function _cloud_files_get_client() {
+  $client = new OpenCloud\Rackspace(variable_get('rackspace_cloud_auth_url'), array(
+    'username' => variable_get('rackspace_cloud_username'),
+    'apiKey' => variable_get('rackspace_cloud_api_key')
+  ));
 
   $credentials = cache_get("rackspace_cloud_credentials");
   
@@ -416,22 +411,24 @@ function _cloud_files_get_authentication() {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
     }
-
-    $connection->ImportCredentials($credentials->data);
+    // tenat should be an int and caused errors as a string
+    $credentials->data['tenant'] = (int)$credentials->data['tenant'];
+    
+    $client->importCredentials($credentials->data);
     // If authentication has expired, then it re-authenticates.
-    if ($credentials->data['expiration'] != $connection->Expiration()) {
-      $credentials = $connection->ExportCredentials();
+    if ($credentials->data['expiration'] != $client->getExpiration()) {
+      $credentials = $client->exportCredentials();
       cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
     }
   } else {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
     }
-    $connection->Authenticate();
+    $client->authenticate();
     
-    $credentials = $connection->ExportCredentials();
+    $credentials = $client->exportCredentials();
     cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
   }
 
-  return $connection;
+  return $client;
 }
