@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Provide file stream wrapper for Rackspace Cloud files.
+ */
+
+/**
  * Implements hook_menu().
  */
 function cloud_files_menu() {
@@ -17,13 +22,15 @@ function cloud_files_menu() {
 }
 
 /**
- * Simple utility function for returning an array containing Rackspace Cloud
- * Files authentication URLs. The PHP SDK for OpenStack/Rackspace APIs lib is
- * loaded to use the US and UK URLs that are declared there.
+ * Simple utility function for getting .
+ * 
+ * The php-opencloud lib is loaded to use the US and UK URLs that are declared
+ * there.
  *
  * Add on to this to add new authentication URLs.
  *
- * @return  array
+ * @return array
+ *   Rackspace Cloud authentication URLs
  */
 function _cloud_files_auth_urls() {
   $info = libraries_load('php-opencloud');
@@ -45,12 +52,12 @@ function _cloud_files_auth_urls() {
 }
 
 /**
- * Simple utility function for returning an array containing Rackspace Cloud
- * Regions.
+ * Simple utility function for getting Rackspace Cloud Regions.
  *
  * Add on to this to add new regions.
  *
- * @return  array
+ * @return array
+ *   Rackspace Cloud Regions
  */
 function _cloud_files_regions() {
   return array(
@@ -65,7 +72,9 @@ function _cloud_files_regions() {
  */
 function cloud_files_admin() {
 
-  // radios group with an other option taken from http://drupal.org/node/772446
+  /*
+   * Radios group with an other option taken from http://drupal.org/node/772446
+   */
 
   $form['rackspace_cloud_auth_url'] = array(
     '#type' => 'item',
@@ -83,46 +92,50 @@ function cloud_files_admin() {
       '#return_value' => $item['url'],
       '#parents' => array('rackspace_cloud_auth_url'),
     );
-    //if this is the first one
+    // If this is the first one.
     if (count($form['rackspace_cloud_auth_url']) == 1) {
-      // make the style match a normal radios group.
+      // Make the style match a normal radios group.
       $form['rackspace_cloud_auth_url'][$key]['#prefix'] = '<div class="form-radios">';
     }
-    //if this is the value previously saved
+    // If this is the value previously saved.
     if ($item['url'] == variable_get('rackspace_cloud_auth_url')) {
-        $other = FALSE;
+      $other = FALSE;
     }
   }
 
-  //if other is used, reset all the default_values
+  // If other is used, reset all the default_values.
   if ($other) {
-      foreach ($cf_urls as $key => $item) {
-        $form['rackspace_cloud_auth_url'][$key]['#default_value'] = 'other';
-      }
+    foreach ($cf_urls as $key => $item) {
+      $form['rackspace_cloud_auth_url'][$key]['#default_value'] = 'other';
+    }
   }
 
+  /*
+   * The 'container-inline' class places elements next to each other, while
+   * the 'form-item' class provides the correct spacing between options.
+   */
   $form['rackspace_cloud_auth_url']['other'] = array(
-    // The 'container-inline' class places elements next to each other, while the
-    // 'form-item' class provides the correct spacing between options.
     '#prefix' => '<div class="container-inline form-item">',
-    '#suffix' => '</div>'
+    '#suffix' => '</div>',
   );
 
-  // By supplying the title here, instead of using the '#field_prefix' property
-  // of the textfield, clicking the text will also select the radio button.
+  /*
+   * By supplying the title here, instead of using the '#field_prefix' property
+   * of the textfield, clicking the text will also select the radio button.
+   */
   $form['rackspace_cloud_auth_url']['other']['other_option'] = array(
     '#type' => 'radio',
     '#title' => t('Other ('),
     '#return_value' => 'other',
     '#default_value' => $other ? 'other' : variable_get('rackspace_cloud_auth_url'),
-    '#parents' => array('rackspace_cloud_auth_url')
+    '#parents' => array('rackspace_cloud_auth_url'),
   );
 
   $form['rackspace_cloud_auth_url']['other']['other_textfield'] = array(
     '#type' => 'textfield',
     '#default_value' => $other ? variable_get('rackspace_cloud_auth_url') : '',
-    '#size' => 20,         // The default size is a bit large...
-    '#suffix' => ')</div>'  // End of the "form-radios" style.
+    '#size' => 20,
+    '#suffix' => ')</div>',
   );
 
   $form['rackspace_cloud_region'] = array(
@@ -140,29 +153,31 @@ function cloud_files_admin() {
       '#return_value' => $key,
       '#parents' => array('rackspace_cloud_region'),
     );
-    //if this is the first one
+    // If this is the first one.
     if (count($form['rackspace_cloud_region']) == 1) {
-      // make the style match a normal radios group.
+      // Make the style match a normal radios group.
       $form['rackspace_cloud_region'][$key]['#prefix'] = '<div class="form-radios">';
     }
-    //if this is the value previously saved
+    // If this is the value previously saved.
     if ($key == variable_get('rackspace_cloud_region')) {
       $other_region = FALSE;
     }
   }
 
-  //if other is used, reset all the default_values
+  // If other is used, reset all the default_values.
   if ($other_region) {
     foreach ($cf_regions as $key => $name) {
       $form['rackspace_cloud_region'][$key]['#default_value'] = 'other';
     }
   }
 
+  /*
+   * The 'container-inline' class places elements next to each other, while
+   * the 'form-item' class provides the correct spacing between options.
+   */
   $form['rackspace_cloud_region']['other'] = array(
-    // The 'container-inline' class places elements next to each other, while the
-    // 'form-item' class provides the correct spacing between options.
     '#prefix' => '<div class="container-inline form-item">',
-    '#suffix' => '</div>'
+    '#suffix' => '</div>',
   );
 
   // By supplying the title here, instead of using the '#field_prefix' property
@@ -172,14 +187,14 @@ function cloud_files_admin() {
     '#title' => t('Other ('),
     '#return_value' => 'other',
     '#default_value' => $other_region ? 'other' : variable_get('rackspace_cloud_region'),
-    '#parents' => array('rackspace_cloud_region')
+    '#parents' => array('rackspace_cloud_region'),
   );
 
   $form['rackspace_cloud_region']['other']['other_region_textfield'] = array(
     '#type' => 'textfield',
     '#default_value' => $other_region ? variable_get('rackspace_cloud_region') : '',
-    '#size' => 20,         // The default size is a bit large...
-    '#suffix' => ')</div>'  // End of the "form-radios" style.
+    '#size' => 20,
+    '#suffix' => ')</div>',
   );
 
   $rackspace_cloud_region = variable_get('rackspace_cloud_region');
@@ -187,7 +202,7 @@ function cloud_files_admin() {
   $rackspace_cloud_api_key = variable_get('rackspace_cloud_api_key');
   $rackspace_cloud_container = variable_get('rackspace_cloud_container');
   $rackspace_cloud_cdn_domain = variable_get('rackspace_cloud_cdn_domain');
-  
+
   $form['rackspace_cloud_username'] = array(
     '#type' => 'textfield',
     '#title' => t('Username'),
@@ -210,21 +225,22 @@ function cloud_files_admin() {
     '#default_value' => $rackspace_cloud_container,
     '#required' => TRUE,
   );
-  // if there is a username/api_key available, try to get the containers list
+  // If there is a username/api_key available, try to get the containers list.
   if ($rackspace_cloud_username && $rackspace_cloud_api_key) {
     try {
       $client = _cloud_files_get_client();
-      $objectStoreService = $client->objectStoreService('cloudFiles', $rackspace_cloud_region);
-      $container_list = $objectStoreService->listContainers();
+      $object_store_service = $client->objectStoreService('cloudFiles', $rackspace_cloud_region);
+      $container_list = $object_store_service->listContainers();
       $container_options = array();
-      while($container = $container_list->Next()) {
+      while ($container = $container_list->Next()) {
         $container_options[$container->name] = $container->name;
       }
       if ($container_list) {
         $form['rackspace_cloud_container']['#type'] = 'select';
         $form['rackspace_cloud_container']['#options'] = $container_options;
       }
-    } catch (Exception $e) {
+    }
+    catch (Exception $e) {
       drupal_set_message(t('Error getting container list.'), 'error');
     }
   }
@@ -235,9 +251,9 @@ function cloud_files_admin() {
     '#description' => t('The container domain. Enter a custom CNAME here. Leave this empty to get the default domain of the selected container.'),
     '#default_value' => $rackspace_cloud_cdn_domain,
   );
-  //if there is a domain set, allow it to be updated
-  //this is so it is first set to the container domain name
-  //but can be updated to a custom CNAME
+  // If there is a domain set, allow it to be updated
+  // this is so it is first set to the container domain name
+  // but can be updated to a custom CNAME.
   if ($rackspace_cloud_cdn_domain) {
     $form['rackspace_cloud_cdn_domain']['#type'] = 'textfield';
     $form['rackspace_cloud_cdn_domain']['#required'] = TRUE;
@@ -249,8 +265,6 @@ function cloud_files_admin() {
     '#description' => t('Check the box to enable logging.'),
     '#default_value' => variable_get('rackspace_cloud_debug'),
   );
-
-  //$form['#submit'][] = 'cloud_files_settings_submit';
 
   return system_settings_form($form);
 }
@@ -268,22 +282,22 @@ function cloud_files_admin_validate($form, &$form_state) {
     $container = $form_state['values']['rackspace_cloud_container'];
     $rackspace_cloud_cdn_domain = $form_state['values']['rackspace_cloud_cdn_domain'];
 
-    //if using Other authentication URL, set its value from the text field
+    // If using Other authentication URL, set its value from the text field.
     if ($form_state['values']['rackspace_cloud_auth_url'] == 'other') {
-        $form_state['values']['rackspace_cloud_auth_url'] = $form_state['values']['other_textfield'];
+      $form_state['values']['rackspace_cloud_auth_url'] = $form_state['values']['other_textfield'];
     }
     $auth_url = $form_state['values']['rackspace_cloud_auth_url'];
 
-    //if using Other region, set its value from the text field
+    // If using Other region, set its value from the text field.
     if ($form_state['values']['rackspace_cloud_region'] == 'other') {
-        $form_state['values']['rackspace_cloud_region'] = $form_state['values']['other_region_textfield'];
+      $form_state['values']['rackspace_cloud_region'] = $form_state['values']['other_region_textfield'];
     }
     $region = $form_state['values']['rackspace_cloud_region'];
 
-    //if API Key was left empty, use the previously saved API Key
-    //with this, it wont be possible to clear the API Key, but it can be changed to something else
-    //this is so the API key doesnt have to be entered every time
-    //if you are changing another setting like container, or debug mode
+    // If API Key was left empty, use the previously saved API Key
+    // with this, it wont be possible to clear the API Key, only update.
+    // This is so the API key doesnt have to be entered every time
+    // if you are changing another setting like container, or debug mode.
     if (!$form_state['values']['rackspace_cloud_api_key']) {
       $form_state['values']['rackspace_cloud_api_key'] = $apikey;
     }
@@ -291,30 +305,29 @@ function cloud_files_admin_validate($form, &$form_state) {
     try {
       $client = new OpenCloud\Rackspace($auth_url, array(
         'username' => $user,
-        'apiKey' => $apikey
+        'apiKey' => $apikey,
       ));
       $client->authenticate();
-      
-      // if authentication didn't error, assume it succeeded, save variables now
-      // so if container is incorrect, we can still fetch container list
-      variable_set('rackspace_cloud_username',$user);
-      variable_set('rackspace_cloud_api_key',$apikey);
-      variable_set('rackspace_cloud_auth_url',$auth_url);
-      variable_set('rackspace_cloud_region',$region);
 
-    } catch (OpenCloud\Common\Exceptions\HttpUnauthorizedError $e) {
-      form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Invalid Username or API Key.'));
-    } catch (Exception $e) {
+      // If authentication didn't error, assume it succeeded, save variables now
+      // so if container is incorrect, we can still fetch container list.
+      variable_set('rackspace_cloud_username', $user);
+      variable_set('rackspace_cloud_api_key', $apikey);
+      variable_set('rackspace_cloud_auth_url', $auth_url);
+      variable_set('rackspace_cloud_region', $region);
+    }
+    catch (Exception $e) {
       form_set_error('rackspace_cloud_username][rackspace_cloud_api_key', t('Error authenticating. Please check the Username and/or API Key.'));
     }
 
-    //if there is not a domain set, get the container domain
+    // If there is not a domain set, get the container domain.
     if (!$rackspace_cloud_cdn_domain) {
       try {
-        $objectStoreService = $client->objectStoreService('cloudFiles', $region);
-        $container = $objectStoreService->getContainer($container);
+        $object_store_service = $client->objectStoreService('cloudFiles', $region);
+        $container = $object_store_service->getContainer($container);
         $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->getCdn()->getCdnUri());
-      } catch (Exception $e) {
+      }
+      catch (Exception $e) {
         form_set_error('rackspace_cloud_container', t('Container does not exist.'));
       }
     }
@@ -324,21 +337,13 @@ function cloud_files_admin_validate($form, &$form_state) {
   }
 }
 
-/*
-function cloud_files_settings_submit($form, $form_state) {
-  $user = $form_state['values']['rackspace_cloud_username'];
-  $apikey = $form_state['values']['rackspace_cloud_api_key'];
-  $container = $form_state['values']['rackspace_cloud_container'];
-}
- */
-
 /**
  * Implements hook_stream_wrappers().
  *
  * expose the stream wrappers to Drupal
  */
 function cloud_files_stream_wrappers() {
-  //Rackspace Cloud Files stream wrapper
+  // Rackspace Cloud Files stream wrapper.
   $wrappers = array(
     'rcf' => array(
       'name' => t('Rackspace Cloud Files'),
@@ -361,7 +366,7 @@ function cloud_files_libraries_info() {
       'version arguments' => array(
         'file' => 'vendor/rackspace/php-opencloud/lib/OpenCloud/Version.php',
         'pattern' => "/    const VERSION = '([\d.]*)'/",
-        'lines' => 100
+        'lines' => 100,
       ),
       'files' => array(
         'php' => array(
@@ -373,59 +378,39 @@ function cloud_files_libraries_info() {
 }
 
 /**
- * Implements hook_requirements().
+ * Simple utility function for getting Rackspace Cloud client instance.
+ * 
+ * @return Rackspace
+ *   Rackspace client instance.
  */
-function cloud_files_requirements() {
-  $t = get_t();
-  $requirements = array();
-
-  $info = libraries_load('php-opencloud');
-  if (!$info['loaded']) {
-    $requirements['cloud_files'] = array(
-      'severity' => REQUIREMENT_ERROR,
-      'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
-      'value' => $t('Failed to load the PHP SDK for OpenStack/Rackspace APIs'),
-      'description' => $t('Please make sure the PHP SDK for OpenStack/Rackspace APIs library is installed in the libraries directory (libraries\php-opencloud).'),
-    );
-  }
-  else {
-    $requirements['php-opencloud'] = array(
-      'severity' => REQUIREMENT_INFO,
-      'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
-      'value' => $info['version'],
-    );
-  }
-
-  return $requirements;
-}
-
 function _cloud_files_get_client() {
   $client = new OpenCloud\Rackspace(variable_get('rackspace_cloud_auth_url'), array(
     'username' => variable_get('rackspace_cloud_username'),
-    'apiKey' => variable_get('rackspace_cloud_api_key')
+    'apiKey' => variable_get('rackspace_cloud_api_key'),
   ));
 
   $credentials = cache_get("rackspace_cloud_credentials");
-  
+
   if ($credentials) {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "loading cached credentials", NULL, WATCHDOG_DEBUG);
     }
-    // tenat should be an int and caused errors as a string
-    $credentials->data['tenant'] = (int)$credentials->data['tenant'];
-    
+    // Tenat should be an int and caused errors as a string.
+    $credentials->data['tenant'] = (int) $credentials->data['tenant'];
+
     $client->importCredentials($credentials->data);
     // If authentication has expired, then it re-authenticates.
     if ($credentials->data['expiration'] != $client->getExpiration()) {
       $credentials = $client->exportCredentials();
       cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
     }
-  } else {
+  }
+  else {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "requesting Rackspace authentication", NULL, WATCHDOG_DEBUG);
     }
     $client->authenticate();
-    
+
     $credentials = $client->exportCredentials();
     cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
   }

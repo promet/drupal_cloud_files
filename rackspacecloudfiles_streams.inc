@@ -1,9 +1,9 @@
 <?php
 /**
  * @file
- *
  * Implement DrupalStreamWrapperInterface to provide an rcf:// streamwrapper.
  */
+
 class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Instance URI (stream).
@@ -22,22 +22,22 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Pointer to where we are in a directory read.
    */
-  protected $directory_pointer = 0;
+  protected $directoryPointer = 0;
 
   /**
    * List of files in a given directory.
    */
-  protected $directory_list;
+  protected $directoryList;
 
   /**
    * The pointer to the next read or write
    */
-  protected $stream_pointer = 0;
+  protected $streamPointer = 0;
 
   /**
    * A buffer for reading/wrting.
    */
-  protected $stream_data = NULL;
+  protected $streamData = NULL;
 
   /**
    * Object cache
@@ -53,7 +53,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
   /**
    * Data is not written to rackspace in stream_write to minimize requests
-   * to rackspace. instead, data is written to the $stream_data property.
+   * to rackspace. instead, data is written to the $streamData property.
    * This $write property is flagged as true, and in stream_flush, all the
    * data is written to rackspace at once.
    *
@@ -64,24 +64,24 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Implements setUri().
    */
-  function setUri($uri) {
+  public function setUri($uri) {
     $this->uri = $uri;
   }
 
   /**
    * Implements getUri().
    */
-  function getUri() {
+  public function getUri() {
     return $this->uri;
   }
 
   /**
    * Returns the local writable target of the resource within the stream.
    *
-   * @param $uri
+   * @param string $uri
    *   Optional URI.
    *
-   * @return
+   * @return string
    *   Returns a string representing a location suitable for writing of a file,
    *   or FALSE if unable to write to the file such as with read-only streams.
    */
@@ -99,7 +99,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Base implementation of getMimeType().
    */
-  static function getMimeType($uri, $mapping = NULL) {
+  public static function getMimeType($uri, $mapping = NULL) {
     if (!isset($mapping)) {
       // The default file map, defined in file.mimetypes.inc is quite big.
       // We only load it when necessary.
@@ -113,11 +113,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     // Remove the first part: a full filename should not match an extension.
     array_shift($file_parts);
 
-    // Iterate over the file parts, trying to find a match.
-    // For my.awesome.image.jpeg, we try:
-    //   - jpeg
-    //   - image.jpeg, and
-    //   - awesome.image.jpeg
+    /* Iterate over the file parts, trying to find a match.
+     * For my.awesome.image.jpeg, we try:
+     *    - jpeg
+     *    - image.jpeg, and
+     *    - awesome.image.jpeg
+     */
     while ($additional_part = array_pop($file_parts)) {
       $extension = strtolower($additional_part . ($extension ? '.' . $extension : ''));
       if (isset($mapping['extensions'][$extension])) {
@@ -131,42 +132,48 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Overrides getExternalUrl().
    */
-  function getExternalUrl() {
+  public function getExternalUrl() {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing getExternalUrl (%uri)", array('%uri' => $this->uri), WATCHDOG_DEBUG);
     }
 
     $target = file_uri_target($this->uri);
-      
-    //get fileinfo from the database
+
+    // Get fileinfo from the database.
     $fileinfo = $this->get_fileinfo($this->uri);
 
-    // if file does not exist in the database (its probably new)
-    if(!$fileinfo) {
-      
-      //attempt to get file from Rackspace        
+    // If file does not exist in the database (its probably new).
+    if (!$fileinfo) {
+
+      /* 
+       * Attempt to get file from Rackspace.
+       */
 
       if (!isset($this->container)) {
         $this->getContainer();
       }
 
-      //exceptions are expensive, but unfortunately RS doesnt provide a better way to check if a file exists
       try{
         $this->object = $this->container->dataObject($target);
 
-        // file does exist!  add file info to the database
+        // File does exist!  add file info to the database.
         $this->add_fileinfo($this->uri, $this->object->getContentType(), $this->object->getContentLength());
-      } catch (Exception $e) {
-        // Image styles support
-        // image is generated when its first requested, so serve from the private file system
-        // this will save the file to rackspace and it'll exist next and wont error into this
+      }
+      catch (Exception $e) {
+        /*
+         * Image styles support.
+         * Image is generated when its first requested, so serve from the
+         * private file system. This will save the file to rackspace and it'll
+         * exist next and wont error into this.
+         */
         $path = explode('/', $this->getLocalPath());
         if ($path[0] == 'styles') {
           array_shift($path);
           return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
-        } else {
-          //file does not exist in rackspace
-          watchdog('cloud_files', t('File not found: @target'), array('@target' => $target), WATCHDOG_ERROR);
+        }
+        else {
+          // File does not exist in rackspace.
+          watchdog('cloud_files', 'File not found: @target', array('@target' => $target), WATCHDOG_ERROR);
         }
       }
     }
@@ -178,18 +185,27 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * We have no concept of chmod, so just return TRUE.
    */
-  function chmod($mode) {
-    //TODO chmod
+  public function chmod($mode) {
     return TRUE;
   }
 
   /**
    * Implements realpath().
    */
-  function realpath() {
+  public function realpath() {
     return 'rcf://' . $this->getLocalPath();
   }
 
+  /**
+   * Returns the canonical absolute path of the URI, if possible.
+   *
+   * @param string $uri
+   *   (optional) The stream wrapper URI to be converted to a canonical
+   *   absolute path. This may point to a directory or another type of file.
+   *
+   * @return string
+   *   Returns the target of the URI.
+   */
   protected function getLocalPath($uri = NULL) {
     if (!isset($uri)) {
       $uri = $this->uri;
@@ -198,18 +214,18 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   }
 
   /**
-   * Opens a stream, as for fopen(), file_get_contents(), file_put_contents()
+   * Opens a stream, as for fopen(), file_get_contents(), file_put_contents().
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the URI to the file to open.
-   * @param $mode
+   * @param string $mode
    *   The file mode ("r", "wb" etc.).
    * @param $options
    *   A bit mask of STREAM_USE_PATH and STREAM_REPORT_ERRORS.
-   * @param &$opened_path
+   * @param string &$opened_path
    *   A string containing the path actually opened.
    *
-   * @return
+   * @return bool
    *   Returns TRUE if file was opened successfully. (Always returns TRUE).
    *
    * @see http://php.net/manual/en/streamwrapper.stream-open.php
@@ -219,7 +235,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing stream_open (%uri)", array('%uri' => $uri), WATCHDOG_DEBUG);
     }
 
-    //reset data
+    // Reset data.
     $this->stream_pointer = 0;
     $this->stream_data = NULL;
 
@@ -227,17 +243,18 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     $target = file_uri_target($this->uri);
 
     if (!isset($this->container)) {
-        $this->getContainer();
+      $this->getContainer();
     }
 
     try{
       // This will load the object if it exists, errors if it doesn't exist.
       $this->object = $this->container->dataObject($target);
-    } catch (Exception $e) {
-      // say stream is open even if this doesnt exist (to write to)
+    }
+    catch (Exception $e) {
+      // Say stream is open even if this doesnt exist (to write to).
     }
 
-    //TODO check $mode, $options and act accordingly
+    // TODO check $mode, $options and act accordingly.
     return TRUE;
   }
 
@@ -252,42 +269,39 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    *   - LOCK_NB if you don't want flock() to block while locking (not
    *     supported on Windows).
    *
-   * @return
+   * @return bool
    *   Always returns TRUE at the present time. (no support)
    *
    * @see http://php.net/manual/en/streamwrapper.stream-lock.php
    */
   public function stream_lock($operation) {
-    //Rackspace Cloud Files does not have locking
-    return False;
+    // Rackspace Cloud Files does not have locking.
+    return FALSE;
   }
 
   /**
    * Support for fread(), file_get_contents() etc.
    *
-   * @param $count
+   * @param int $count
    *   Maximum number of bytes to be read.
    *
-   * @return
+   * @return string
    *   The string that was read, or FALSE in case of an error.
    *
    * @see http://php.net/manual/en/streamwrapper.stream-read.php
    */
   public function stream_read($count) {
-    //if the data is empty, get the data from the object
-    //this stores all the data in the $stream_data property, only request once
+    // If the data is empty, get the data from the object.
+    // This stores all the data in the $streamData property, only request once.
     if (!$this->stream_data) {
-        //if the object is empty, get the object from rackspace
-        if (!$this->object) {
-            if (!isset($this->container)) {
-                $this->getContainer();
-            }
-            $this->object = $this->container->dataObject($target);
+      // If the object is empty, get the object from Rackspace.
+      if (!$this->object) {
+        if (!isset($this->container)) {
+          $this->getContainer();
         }
-        $this->stream_data = $this->object->getContent();
-        //$temp = fopen("temporary://testfile","w");
-        //$this->stream_data = $object->stream($temp);
-        //fclose($temp);
+        $this->object = $this->container->dataObject($target);
+      }
+      $this->stream_data = $this->object->getContent();
     }
     $data = substr($this->stream_data, $this->stream_pointer, $count);
     $this->stream_pointer += $count;
@@ -297,16 +311,17 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for fwrite(), file_put_contents() etc.
    *
-   * @param $data
+   * @param string $data
    *   The string to be written.
    *
-   * @return
+   * @return int
    *   The number of bytes written (integer).
    *
    * @see http://php.net/manual/en/streamwrapper.stream-write.php
    */
   public function stream_write($data) {
-    $this->write = TRUE; //write when flushed
+    // Flag write when flushed.
+    $this->write = TRUE;
     $this->stream_data .= $data;
 
     $byteswritten = strlen($data);
@@ -319,26 +334,23 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for feof().
    *
-   * @return
+   * @return bool
    *   TRUE if end-of-file has been reached.
    *
    * @see http://php.net/manual/en/streamwrapper.stream-eof.php
    */
   public function stream_eof() {
-    //if the data is empty, get the data from the object
-    //this stores all the data in the $stream_data property, only request once
+    // If the data is empty, get the data from the object.
+    // This stores all the data in the $streamData property, only request once.
     if (!$this->stream_data) {
-        //if the object is empty, get the object from rackspace
-        if (!$this->object) {
-            if (!isset($this->container)) {
-                $this->getContainer();
-            }
-            $this->object = $this->container->dataObject(file_uri_target($this->uri));
+      // If the object is empty, get the object from rackspace.
+      if (!$this->object) {
+        if (!isset($this->container)) {
+          $this->getContainer();
         }
-        $this->stream_data = $this->object->getContent();
-        //$temp = fopen("temporary://testfile","w");
-        //$this->stream_data = $object->stream($temp);
-        //fclose($temp);
+        $this->object = $this->container->dataObject(file_uri_target($this->uri));
+      }
+      $this->stream_data = $this->object->getContent();
     }
     return $this->stream_pointer >= strlen($this->stream_data);
   }
@@ -346,12 +358,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for fseek().
    *
-   * @param $offset
+   * @param int $offset
    *   The byte offset to got to.
    * @param $whence
    *   SEEK_SET, SEEK_CUR, or SEEK_END.
    *
-   * @return
+   * @return bool
    *   TRUE on success.
    *
    * @see http://php.net/manual/en/streamwrapper.stream-seek.php
@@ -364,18 +376,21 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
           return TRUE;
         }
         return FALSE;
+
       case SEEK_CUR:
         if ($offset >= 0) {
           $this->stream_pointer += $offset;
           return TRUE;
         }
         return FALSE;
+
       case SEEK_END:
         if (strlen($this->stream_data) + $offset >= 0) {
           $this->stream_pointer = strlen($this->stream_data) + $offset;
           return TRUE;
         }
         return FALSE;
+
       default:
         return FALSE;
     }
@@ -385,7 +400,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for fflush().
    *
-   * @return
+   * @return bool
    *   TRUE if data was successfully stored (or there was no data to store).
    *
    * @see http://php.net/manual/en/streamwrapper.stream-flush.php
@@ -396,21 +411,22 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
 
     if (!$this->object) {
-        if (!$this->container) {
-          $this->getContainer();
-        }
-        $target = file_uri_target($this->uri);
+      if (!$this->container) {
+        $this->getContainer();
+      }
+      $target = file_uri_target($this->uri);
 
-        try{
-          // File may not exist yet.
-          $this->object = $this->container->dataObject($target);
-        } catch (Exception $e) {
-          // Create new file if file does not exist.
-          $this->object = $this->container->dataObject();
-          $this->object->setName($target);
-          // Let Drupal guess the mime type
-          $this->object->setContentType($this->getMimeType($this->uri));
-        }
+      try{
+        // File may not exist yet.
+        $this->object = $this->container->dataObject($target);
+      }
+      catch (Exception $e) {
+        // Create new file if file does not exist.
+        $this->object = $this->container->dataObject();
+        $this->object->setName($target);
+        // Let Drupal guess the mime type.
+        $this->object->setContentType($this->getMimeType($this->uri));
+      }
     }
     if ($this->write) {
       $this->object->setContent($this->stream_data);
@@ -418,7 +434,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
       $this->add_fileinfo($this->uri, $this->object->getContentType(), $this->object->getContentLength());
     }
-    //$this->object = NULL;
+
     $this->stream_data = NULL;
     $this->stream_pointer = 0;
     return TRUE;
@@ -427,7 +443,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for ftell().
    *
-   * @return
+   * @return int
    *   The current offset in bytes from the beginning of file.
    *
    * @see http://php.net/manual/en/streamwrapper.stream-tell.php
@@ -439,7 +455,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for fstat().
    *
-   * @return
+   * @return array
    *   An array with file status, or FALSE in case of an error - see fstat()
    *   for a description of this array.
    *
@@ -457,7 +473,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for fclose().
    *
-   * @return
+   * @return bool
    *   TRUE if stream was successfully closed.
    *
    * @see http://php.net/manual/en/streamwrapper.stream-close.php
@@ -470,17 +486,18 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     unset($this->object);
     $this->stream_data = NULL;
     $this->stream_pointer = 0;
-    unset($this->stream_data); //unassign the reference.
+    // Unassign the reference.
+    unset($this->stream_data);
     return TRUE;
   }
 
   /**
    * Support for unlink().
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the uri to the resource to delete.
    *
-   * @return
+   * @return bool
    *   TRUE if resource was successfully deleted.
    *
    * @see http://php.net/manual/en/streamwrapper.unlink.php
@@ -489,29 +506,30 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing unlink", NULL, WATCHDOG_DEBUG);
     }
-    
+
     $this->uri = $uri;
-    
+
     $target = $this->getLocalPath($this->uri);
 
     if (!isset($this->container)) {
-        $this->getContainer();
+      $this->getContainer();
     }
-    
+
     $deleted = FALSE;
     $doesnotexist = FALSE;
     try {
-      // dont put name here becuase it will fetch the object
+      // Dont put name here becuase it will fetch the object.
       $obj = $this->container->dataObject();
-      // delete by name, without fetching the object
+      // Delete by name, without fetching the object.
       $obj->setName($target);
       $deleted = $obj->delete();
-    } catch (NoSuchObjectException $e) {
+    }
+    catch (NoSuchObjectException $e) {
       $doesnotexist = TRUE;
     }
-    
+
     if ($deleted || $doesnotexist) {
-      // remove file from database
+      // Remove file from database.
       $this->remove_fileinfo($this->uri);
       return TRUE;
     }
@@ -521,12 +539,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for rename().
    *
-   * @param $from_uri,
+   * @param string $from_uri,
    *   The uri to the file to rename.
-   * @param $to_uri
+   * @param string $to_uri
    *   The new uri for file.
    *
-   * @return
+   * @return bool
    *   TRUE if file was successfully renamed.
    *
    * @see http://php.net/manual/en/streamwrapper.rename.php
@@ -536,87 +554,92 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing rename (%from, %to)", array("%from" => $from_uri, "%to" => $to_uri), WATCHDOG_DEBUG);
     }
 
-    //TODO rename
+    // TODO rename.
     return FALSE;
   }
 
   /**
    * Support for stat().
+   * 
    * This important function goes back to the Unix way of doing things.
    * In this example almost the entire stat array is irrelevant, but the
    * mode is very important. It tells PHP whether we have a file or a
    * directory and what the permissions are. All that is packed up in a
    * bitmask. This is not normal PHP fodder.
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the URI to get information about.
-   * @param $flags
+   * @param string $flags
    *   A bit mask of STREAM_URL_STAT_LINK and STREAM_URL_STAT_QUIET.
    *
-   * @return
+   * @return array
    *   An array with file status, or FALSE in case of an error - see fstat()
    *   for a description of this array.
    *
    * @see http://php.net/manual/en/streamwrapper.url-stat.php
    */
   public function url_stat($uri, $flags) {
-    if(!isset($uri)) {
+    if (!isset($uri)) {
       $uri = $this->uri;
     }
     $this->uri = $uri;
-    
+
     $target  = $this->getTarget($this->uri);
-    
+
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "Checking file status (url_stat) %file", array('%file' => $uri), WATCHDOG_DEBUG);
     }
 
-    $stat = FALSE; // Default to fail.
+    // Default to fail.
+    $stat = FALSE;
     $mode = 0;
-    
-    if(empty($target)) {
-      $fileinfo = array('filemime'=>'application/directory','filesize'=>1);
-    } else {
+
+    if (empty($target)) {
+      $fileinfo = array('filemime' => 'application/directory', 'filesize' => 1);
+    }
+    else {
       $fileinfo = $this->get_fileinfo($this->uri);
     }
-    
-    // if file does not exist in the database (its probably new)
-    // try to get it from Rackspace
-    if(!$fileinfo) {
+
+    // If file does not exist in the database (its probably new).
+    // Try to get it from Rackspace.
+    if (!$fileinfo) {
       if (!isset($this->object)) {
-          if (!isset($this->container)) {
-              $this->getContainer();
-          }
+        if (!isset($this->container)) {
+          $this->getContainer();
+        }
       }
 
-      //check if the file exists
+      // Check if the file exists.
       $objexists = TRUE;
       try{
         $this->object = $this->container->dataObject($target);
         $filemime = $this->object->getContentType();
         $filesize = $this->object->getContentLength();
-        
-        // file does exist!  add file info to the database
+
+        // File does exist!  add file info to the database.
         $this->add_fileinfo($this->uri, $filemime, $filesize);
-      } catch (Exception $e) {
-        //$file = $cont->create_object($target);
+      }
+      catch (Exception $e) {
         $objexists = FALSE;
       }
     }
     else {
-      // fileinfo exists in the database
+      // Fileinfo exists in the database.
       $objexists = TRUE;
       $filemime = $fileinfo['filemime'];
       $filesize = $fileinfo['filesize'];
     }
 
     if ($objexists) {
-      //if the target is empty, its the root of the container (counts as a directory)
+      // If the target is empty, its the root of the container (directory).
       if ($filemime == "application/directory") {
-        $mode = 0040000; // S_IFDIR means it's a directory.
+        // S_IFDIR means it's a directory.
+        $mode = 0040000;
       }
       else {
-        $mode = 0100000; // S_IFREG, means it's a file.
+        // S_IFREG, means it's a file.
+        $mode = 0100000;
       }
 
       if ($mode) {
@@ -659,10 +682,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Gets the name of the directory from a given path.
    *
-   * @param $uri
+   * @param string $uri
    *   A URI.
    *
-   * @return
+   * @return string
    *   A string containing the directory name.
    *
    * @see drupal_dirname()
@@ -686,14 +709,14 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for mkdir().
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the URI to the directory to create.
    * @param $mode
    *   Permission flags - see mkdir().
    * @param $options
    *   A bit mask of STREAM_REPORT_ERRORS and STREAM_MKDIR_RECURSIVE.
    *
-   * @return
+   * @return bool
    *   TRUE if directory was successfully created.
    *
    * @see http://php.net/manual/en/streamwrapper.mkdir.php
@@ -707,51 +730,52 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     $target = file_uri_target($this->uri);
 
-    //only make directories if there are directories to make
+    // Only make directories if there are directories to make.
     if ($target) {
-      //TODO check if it already exists?
-      //TODO check options for recursive?
+      // TODO check if it already exists?
+      // TODO check options for recursive?
       $recursive = (bool) ($options & STREAM_MKDIR_RECURSIVE);
 
       if (!isset($this->container)) {
         $this->getContainer();
       }
 
-      // add each directory
+      // Add each directory.
       $dirs = explode('/', $target);
       $build_path = "";
       foreach ($dirs as $dir) {
         if (!$build_path) {
           $build_path = $dir;
-        } else {
+        }
+        else {
           $build_path .= "/" . $dir;
         }
-        
+
         $objexists = TRUE;
-        // check if this dir already exists
+        // Check if this dir already exists.
         $fileinfo = $this->get_fileinfo('rcf://' . $build_path);
-        if(!$fileinfo) {
-          // doesnt exist in db, check cloud files
+        if (!$fileinfo) {
+          // Doesn't exist in db, check cloud files.
           try{
             $this->object = $this->container->dataObject($build_path);
-            // file does exist!  add file info to the database
+            // File does exist!  add file info to the database.
             $this->add_fileinfo('rcf://' . $build_path, 'application/directory', 1);
-          } catch (Exception $e) {
-            // not in cloud files either, create it
+          }
+          catch (Exception $e) {
+            // Not in cloud files either, create it.
             $objexists = FALSE;
           }
         }
-        
-        if(!$objexists) {
+
+        if (!$objexists) {
           $info = new stdClass();
           $info->subdir = $build_path;
-          //$info->content_type = 'application/directory';
           $obj = $this->container->dataObject($info);
           $obj->setContentType('application/directory');
           $obj->setContent('');
           $obj->update();
-        
-          // add to database
+
+          // Add to database.
           $this->add_fileinfo("rcf://" . $build_path, "application/directory", 1);
         }
       }
@@ -763,12 +787,12 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for rmdir().
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the URI to the directory to delete.
    * @param $options
    *   A bit mask of STREAM_REPORT_ERRORS.
    *
-   * @return
+   * @return bool
    *   TRUE if directory was successfully removed.
    *
    * @see http://php.net/manual/en/streamwrapper.rmdir.php
@@ -778,19 +802,19 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing rmdir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
     }
 
-    // TODO: delete directory and all files
+    // TODO: delete directory and all files.
     return FALSE;
   }
 
   /**
    * Support for opendir().
    *
-   * @param $uri
+   * @param string $uri
    *   A string containing the URI to the directory to open.
    * @param $options
    *   Unknown (parameter is not documented in PHP Manual).
    *
-   * @return
+   * @return bool
    *   TRUE on success.
    *
    * @see http://php.net/manual/en/streamwrapper.dir-opendir.php
@@ -800,14 +824,14 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing dir_opendir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
     }
 
-    /* TODO get list of items in directory */
+    // TODO get list of items in directory.
     return FALSE;
   }
 
   /**
    * Support for readdir().
    *
-   * @return
+   * @return mixed
    *   The next filename, or FALSE if there are no more files in the directory.
    */
   public function dir_readdir() {
@@ -826,7 +850,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   /**
    * Support for rewinddir().
    *
-   * @return
+   * @return bool
    *   TRUE on success.
    */
   public function dir_rewinddir() {
@@ -834,14 +858,13 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing dir_rewinddir", NULL, WATCHDOG_DEBUG);
     }
 
-      //TODO: what is this?
     $this->directory_pointer = 0;
   }
 
   /**
    * Support for closedir().
    *
-   * @return
+   * @return bool
    *   TRUE on success.
    *
    * @see http://php.net/manual/en/streamwrapper.dir-closedir.php
@@ -857,7 +880,10 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
   }
 
   /**
-   * Implements abstract public function getDirectoryPath()
+   * Implements abstract public function getDirectoryPath().
+   *
+   * @return string
+   *   Returns full URL to a Rackspace Cloud Files domain.
    */
   public function getDirectoryPath() {
     if (variable_get('rackspace_cloud_debug')) {
@@ -866,16 +892,38 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     return "http://" . variable_get('rackspace_cloud_cdn_domain');
   }
-  
+
+  /**
+   * Simple utility function for adding fileifo to database.
+   * 
+   * @param string $uri
+   *   A string containing the URI of the file being added.
+   * @param string $filemime
+   *   A string containing the mimetype of the file being added.
+   * @param int $uri
+   *   The size of the file being added.
+   *
+   * @return bool
+   *   FALSE if it failed.
+   */
   public function add_fileinfo($uri, $filemime, $filesize) {
-    // add file info to database
+    // Add file info to database.
     $new_file = new stdClass();
     $new_file->uri = $uri;
     $new_file->filemime = $filemime;
-    $new_file->filesize = $filesize;        
-    drupal_write_record('cloud_files', $new_file);
+    $new_file->filesize = $filesize;
+    return drupal_write_record('cloud_files', $new_file);
   }
-  
+
+  /**
+   * Simple utility function for getting fileifo from the database.
+   * 
+   * @param string $uri
+   *   A string containing the URI of the file to get.
+   *
+   * @return array
+   *   An array containing the file info (uri, filemime, and filesize).
+   */
   public function get_fileinfo($uri) {
     $query = db_select('cloud_files', 'cf');
     $query
@@ -884,26 +932,44 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     $result = $query->execute();
     return $result->fetchAssoc();
   }
-  
+
+  /**
+   * Simple utility function for deleting fileifo from the database.
+   * 
+   * @param string $uri
+   *   A string containing the URI of the file to delete.
+   */
   public function remove_fileinfo($uri) {
     return db_delete('cloud_files')
       ->condition('uri', $uri)
       ->execute();
   }
-  
+
+  /**
+   * Simple utility function for getting Rackspace Cloud container.
+   * 
+   * @return Container
+   *   Rackspace container instance.
+   */
   public function getContainer() {
     libraries_load('php-opencloud');
 
     $client = $this->getClient();
-    $objectStoreService = $client->objectStoreService('cloudFiles', variable_get('rackspace_cloud_region'));
+    $object_store_service = $client->objectStoreService('cloudFiles', variable_get('rackspace_cloud_region'));
 
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "requesting container from Rackspace (%container)", array('%container' => variable_get('rackspace_cloud_container')), WATCHDOG_DEBUG);
     }
 
-    $this->container = $objectStoreService->getContainer(variable_get('rackspace_cloud_container'));
+    $this->container = $object_store_service->getContainer(variable_get('rackspace_cloud_container'));
   }
 
+  /**
+   * Simple utility function for getting Rackspace Cloud client instance.
+   * 
+   * @return Rackspace
+   *   Rackspace client instance.
+   */
   public function getClient() {
     return _cloud_files_get_client();
   }
