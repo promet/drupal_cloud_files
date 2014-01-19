@@ -1,6 +1,13 @@
 
-Cloud Files 7.x-1.x, 20xx-xx-xx
+Cloud Files 7.x-1.2-rc1, 2014-01-19
 -------------------------------
+by mr.moses: cleaned up code to better adhere to Drupal coding standards
+Issue #2086239 by mr.moses, rm-rf, et al: updated to php-opencloud 1.9.1
+
+
+Cloud Files 7.x-1.1, 2013-08-01
+-------------------------------
+No updates.
 
 
 Cloud Files 7.x-1.1-beta1, 2013-07-25
