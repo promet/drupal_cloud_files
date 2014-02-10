@@ -826,11 +826,11 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     
     $this->getContainer();
     $prefix = file_uri_target($uri);
-    $list = $this->container->list_objects(variable_get('rackspace_cloud_container'), 0, NULL, $prefix);
+    $list = $this->container->objectList(variable_get('rackspace_cloud_container'), 0, NULL, $prefix);
     
     if ($length = strlen($prefix)) {
       $length++;
-      foreach ($list as &$item) {
+      foreach ($list as $item) {
         $item = substr_replace($item, '', 0, $length);
       }
     }
