@@ -1,12 +1,8 @@
 Installation
 
-- Download and install the Libraries (7.x-2.x branch) module
-  http://drupal.org/project/libraries
-
 - Install the php-opencloud library (http://php-opencloud.com/) using Composer
-  into sites/all/libraries/php-opencloud/.  If you have Composer installed
-  (http://getcomposer.org/), run "composer require rackspace/php-opencloud:dev-master"
-  from inside sites/all/libraries/php-opencloud/
+  without bogarting the autoloader. You may have to use composer_manager until
+  something good comes along
 
 - Configure your setttings at /admin/config/media/cloud-files
 

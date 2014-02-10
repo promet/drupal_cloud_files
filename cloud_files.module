@@ -21,6 +21,10 @@ function cloud_files_menu() {
   return $items;
 }
 
+function _cloud_files_loaded() {
+  return class_exists(OpenCloud\Rackspace);
+}
+
 /**
  * Simple utility function for getting .
  * 
@@ -33,8 +37,7 @@ function cloud_files_menu() {
  *   Rackspace Cloud authentication URLs
  */
 function _cloud_files_auth_urls() {
-  $info = libraries_load('php-opencloud');
-  if ($info['loaded']) {
+  if (_cloud_files_loaded()) {
     return array(
       'us' => array(
         'name' => t('United States'),
@@ -275,8 +278,7 @@ function cloud_files_admin() {
  * Validate Rackspace Cloud settings
  */
 function cloud_files_admin_validate($form, &$form_state) {
-  $info = libraries_load('php-opencloud');
-  if ($info['loaded']) {
+  if (_cloud_files_loaded()) {
     $user = $form_state['values']['rackspace_cloud_username'];
     $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
     $container = $form_state['values']['rackspace_cloud_container'];
@@ -352,29 +354,6 @@ function cloud_files_stream_wrappers() {
     ),
   );
   return $wrappers;
-}
-
-/**
- * Implements hook_libraries_info().
- */
-function cloud_files_libraries_info() {
-  return array(
-    'php-opencloud' => array(
-      'name' => 'PHP SDK for OpenStack/Rackspace APIs',
-      'vendor url' => 'http://php-opencloud.com/',
-      'download url' => 'http://php-opencloud.com/',
-      'version arguments' => array(
-        'file' => 'vendor/rackspace/php-opencloud/lib/OpenCloud/Version.php',
-        'pattern' => "/    const VERSION = '([\d.]*)'/",
-        'lines' => 100,
-      ),
-      'files' => array(
-        'php' => array(
-          'vendor/autoload.php',
-        ),
-      ),
-    ),
-  );
 }
 
 /**
