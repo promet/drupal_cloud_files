@@ -823,9 +823,21 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing dir_opendir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
     }
-
-    // TODO get list of items in directory.
-    return FALSE;
+    
+    $this->getContainer();
+    $prefix = file_uri_target($uri);
+    $list = $this->container->list_objects(variable_get('rackspace_cloud_container'), 0, NULL, $prefix);
+    
+    if ($length = strlen($prefix)) {
+      $length++;
+      foreach ($list as &$item) {
+        $item = substr_replace($item, '', 0, $length);
+      }
+    }
+    
+    $this->directory_list = $list;
+    
+    return TRUE;
   }
 
   /**
@@ -838,13 +850,17 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing dir_readdir", NULL, WATCHDOG_DEBUG);
     }
-
-    if ($this->directory_pointer < count($this->directory_list)) {
-      $next = $this->directory_list[$this->directory_pointer];
+    
+    $pointer = $this->directory_pointer;
+    
+    if (!empty($this->directory_list[$pointer])) {
       $this->directory_pointer++;
-      return $next;
+      return $this->directory_list[$pointer];
     }
-    return FALSE;
+    else {
+      return FALSE;
+    }
+    
   }
 
   /**
@@ -859,6 +875,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     }
 
     $this->directory_pointer = 0;
+    return TRUE;
   }
 
   /**
