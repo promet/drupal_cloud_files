@@ -8,27 +8,28 @@
 /**
  * Implements hook_requirements().
  */
-function cloud_files_requirements() {
-  $t = get_t();
+function cloud_files_requirements($phase) {
   $requirements = array();
+  if ($phase === 'runtime') {
+    $t = get_t();
 
-  drupal_load('module', 'cloud_files');
-  if (!_cloud_files_loaded()) {
-    $requirements['cloud_files'] = array(
-      'severity' => REQUIREMENT_ERROR,
-      'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
-      'value' => $t('Failed to load the PHP SDK for OpenStack/Rackspace APIs'),
-      'description' => $t('Please make sure the PHP SDK for OpenStack/Rackspace APIs library is installed in the libraries directory (libraries\php-opencloud).'),
-    );
+    drupal_load('module', 'cloud_files');
+    if (!_cloud_files_loaded()) {
+      $requirements['cloud_files'] = array(
+        'severity' => REQUIREMENT_ERROR,
+        'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
+        'value' => $t('Failed to load the PHP SDK for OpenStack/Rackspace APIs'),
+        'description' => $t('Please make sure the PHP SDK for OpenStack/Rackspace APIs library is installed in the libraries directory (libraries\php-opencloud).'),
+      );
+    }
+    else {
+      $requirements['php-opencloud'] = array(
+        'severity' => REQUIREMENT_INFO,
+        'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
+        'value' => $info['version'],
+      );
+    }
   }
-  else {
-    $requirements['php-opencloud'] = array(
-      'severity' => REQUIREMENT_INFO,
-      'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),
-      'value' => $info['version'],
-    );
-  }
-
   return $requirements;
 }
 
