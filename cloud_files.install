@@ -12,8 +12,8 @@ function cloud_files_requirements() {
   $t = get_t();
   $requirements = array();
 
-  $info = libraries_load('php-opencloud');
-  if (!$info['loaded']) {
+  drupal_load('module', 'cloud_files');
+  if (!_cloud_files_loaded()) {
     $requirements['cloud_files'] = array(
       'severity' => REQUIREMENT_ERROR,
       'title' => $t('PHP SDK for OpenStack/Rackspace APIs'),

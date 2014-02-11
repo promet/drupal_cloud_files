@@ -22,7 +22,7 @@ function cloud_files_menu() {
 }
 
 function _cloud_files_loaded() {
-  return class_exists(OpenCloud\Rackspace);
+  return class_exists('OpenCloud\Rackspace');
 }
 
 /**
