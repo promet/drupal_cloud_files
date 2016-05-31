@@ -1,0 +1,15 @@
+{
+    "name": "promet/drupal_cloud_files",
+    "description": "talks to RackSpace Cloud Files with Drupal",
+    "require": {
+        "rackspace/php-opencloud": "1.9.1"
+    },
+    "license": "bsd",
+    "authors": [
+        {
+            "name": "Will Milton",
+            "email": "wa.milton@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev"
+}
