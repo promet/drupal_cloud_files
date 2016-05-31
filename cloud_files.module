@@ -6,6 +6,44 @@
  */
 
 /**
+ * Implements hook_cron().
+ */
+// function cloud_files_cron() {
+//   // Fetch all the files that are stored locally temporarily.
+//   $query = new EntityFieldQuery();
+//   $query
+//     ->entityCondition('entity_type', 'file')
+//     ->entityCondition('bundle', 'image')
+//     ->propertyOrderBy('fid')
+//     ->propertyCondition('status', FILE_STATUS_PERMANENT)
+//     ->propertyCondition('uri', 'rcf-tmp://', 'STARTS_WITH')
+//     ->range(0, 100);
+
+//   $result = $query->execute();
+
+//   if (!empty($result['file'])) {
+//     $queue = DrupalQueue::get('cloud_files');
+//     $queue->createQueue();
+
+//     $files = file_load_multiple(array_keys($result['file']));
+//     foreach ($files as $file) {
+//       $queue->createItem($file);
+//     }
+//   }
+// }
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+// function cloud_files_cron_queue_info() {
+//   $queues['cloud_files'] = array(
+//     'worker callback' => 'cloud_files_migrate_worker',
+//   );
+
+//   return $queues;
+// }
+
+/**
  * Implements hook_menu().
  */
 function cloud_files_menu() {
@@ -137,7 +175,7 @@ function cloud_files_admin() {
   $form['rackspace_cloud_auth_url']['other']['other_textfield'] = array(
     '#type' => 'textfield',
     '#default_value' => $other ? variable_get('rackspace_cloud_auth_url') : '',
-    '#size' => 20,
+    '#size' => 60,
     '#suffix' => ')</div>',
   );
 
@@ -205,6 +243,7 @@ function cloud_files_admin() {
   $rackspace_cloud_api_key = variable_get('rackspace_cloud_api_key');
   $rackspace_cloud_container = variable_get('rackspace_cloud_container');
   $rackspace_cloud_cdn_domain = variable_get('rackspace_cloud_cdn_domain');
+  $rackspace_cloud_cdn_ssl_domain = variable_get('rackspace_cloud_cdn_ssl_domain');
 
   $form['rackspace_cloud_username'] = array(
     '#type' => 'textfield',
@@ -235,7 +274,7 @@ function cloud_files_admin() {
       $object_store_service = $client->objectStoreService('cloudFiles', $rackspace_cloud_region);
       $container_list = $object_store_service->listContainers();
       $container_options = array();
-      while ($container = $container_list->Next()) {
+      while ($container = $container_list->next()) {
         $container_options[$container->name] = $container->name;
       }
       if ($container_list) {
@@ -254,12 +293,22 @@ function cloud_files_admin() {
     '#description' => t('The container domain. Enter a custom CNAME here. Leave this empty to get the default domain of the selected container.'),
     '#default_value' => $rackspace_cloud_cdn_domain,
   );
+
+  $form['rackspace_cloud_cdn_ssl_domain'] = array(
+    '#type' => 'value',
+    '#title' => t('SSL Domain'),
+    '#description' => t('The container SSL domain. Enter a custom CNAME here. Leave this empty to get the default domain of the selected container.'),
+    '#default_value' => $rackspace_cloud_cdn_ssl_domain,
+  );
+  
   // If there is a domain set, allow it to be updated
   // this is so it is first set to the container domain name
   // but can be updated to a custom CNAME.
   if ($rackspace_cloud_cdn_domain) {
     $form['rackspace_cloud_cdn_domain']['#type'] = 'textfield';
-    $form['rackspace_cloud_cdn_domain']['#required'] = TRUE;
+  }
+  if ($rackspace_cloud_cdn_domain) {
+    $form['rackspace_cloud_cdn_ssl_domain']['#type'] = 'textfield';
   }
 
   $form['rackspace_cloud_debug'] = array(
@@ -283,6 +332,7 @@ function cloud_files_admin_validate($form, &$form_state) {
     $apikey = $form_state['values']['rackspace_cloud_api_key'] ? $form_state['values']['rackspace_cloud_api_key'] : variable_get('rackspace_cloud_api_key');
     $container = $form_state['values']['rackspace_cloud_container'];
     $rackspace_cloud_cdn_domain = $form_state['values']['rackspace_cloud_cdn_domain'];
+    $rackspace_cloud_cdn_ssl_domain = $form_state['values']['rackspace_cloud_cdn_ssl_domain'];
 
     // If using Other authentication URL, set its value from the text field.
     if ($form_state['values']['rackspace_cloud_auth_url'] == 'other') {
@@ -323,11 +373,12 @@ function cloud_files_admin_validate($form, &$form_state) {
     }
 
     // If there is not a domain set, get the container domain.
-    if (!$rackspace_cloud_cdn_domain) {
+    if (!$rackspace_cloud_cdn_domain || !$rackspace_cloud_cdn_ssl_domain) {
       try {
         $object_store_service = $client->objectStoreService('cloudFiles', $region);
         $container = $object_store_service->getContainer($container);
-        $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace(array('http://', 'https://'), '', $container->getCdn()->getCdnUri());
+        $form_state['values']['rackspace_cloud_cdn_domain'] = str_replace('http://', '', $container->getCdn()->getCdnUri());
+        $form_state['values']['rackspace_cloud_cdn_ssl_domain'] = str_replace('https://', '', $container->getCdn()->getCdnSslUri());
       }
       catch (Exception $e) {
         form_set_error('rackspace_cloud_container', t('Container does not exist.'));
@@ -351,6 +402,12 @@ function cloud_files_stream_wrappers() {
       'name' => t('Rackspace Cloud Files'),
       'class' => 'RackspaceCloudFilesStreamWrapper',
       'description' => t('Rackspace Cloud Files.'),
+    ),
+    'rcf-tmp' => array(
+      'name' => t('Temporary Rackspace Cloud Files'),
+      'class' => 'DrupalPublicStreamWrapper',
+      'description' => t('Temporary storage for files to be moved to Rackspace.'),
+      'type' => STREAM_WRAPPERS_LOCAL_NORMAL,
     ),
   );
   return $wrappers;
@@ -379,7 +436,8 @@ function _cloud_files_get_client() {
 
     $client->importCredentials($credentials->data);
     // If authentication has expired, then it re-authenticates.
-    if ($credentials->data['expiration'] != $client->getExpiration()) {
+    if ($client->getTokenObject()->hasExpired()) {
+      // Exporting credentials will authenticate if its expired.
       $credentials = $client->exportCredentials();
       cache_set("rackspace_cloud_credentials", $credentials, 'cache', CACHE_TEMPORARY);
     }
@@ -396,3 +454,12 @@ function _cloud_files_get_client() {
 
   return $client;
 }
+
+/**
+ * Worker function for migrating files from 'rfc-tmp' over to 'rfc'.
+ */
+// function cloud_files_migrate_worker($file) {
+//   list(, $original_path) = explode('://', $file->uri);
+//   $destination = 'rcf://' . $original_path;
+//   file_move($file, $destination);
+// }

@@ -8,7 +8,8 @@
 /**
  * Implements hook_requirements().
  */
-function cloud_files_requirements($phase) {
+function cloud_files_requirements() {
+  $t = get_t();
   $requirements = array();
   if ($phase === 'runtime') {
     $t = get_t();
@@ -30,6 +31,7 @@ function cloud_files_requirements($phase) {
       );
     }
   }
+
   return $requirements;
 }
 
@@ -41,6 +43,7 @@ function cloud_files_uninstall() {
   variable_del('rackspace_cloud_api_key');
   variable_del('rackspace_cloud_container');
   variable_del('rackspace_cloud_cdn_domain');
+  variable_del('rackspace_cloud_cdn_ssl_domain');
   variable_del('rackspace_cloud_auth_url');
   variable_get('rackspace_cloud_region');
   variable_del('rackspace_cloud_debug');

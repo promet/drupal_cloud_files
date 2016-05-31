@@ -139,47 +139,13 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
 
     $target = file_uri_target($this->uri);
 
-    // Get fileinfo from the database.
-    $fileinfo = $this->get_fileinfo($this->uri);
-
-    // If file does not exist in the database (its probably new).
-    if (!$fileinfo) {
-
-      /* 
-       * Attempt to get file from Rackspace.
-       */
-
-      if (!isset($this->container)) {
-        $this->getContainer();
-      }
-
-      try{
-        $this->object = $this->container->dataObject($target);
-
-        // File does exist!  add file info to the database.
-        $this->add_fileinfo($this->uri, $this->object->getContentType(), $this->object->getContentLength());
-      }
-      catch (Exception $e) {
-        /*
-         * Image styles support.
-         * Image is generated when its first requested, so serve from the
-         * private file system. This will save the file to rackspace and it'll
-         * exist next and wont error into this.
-         */
-        $path = explode('/', $this->getLocalPath());
-        if ($path[0] == 'styles') {
-          array_shift($path);
-          return url('system/files/styles/' . implode('/', $path), array('absolute' => TRUE));
-        }
-        else {
-          // File does not exist in rackspace.
-          watchdog('cloud_files', 'File not found: @target', array('@target' => $target), WATCHDOG_ERROR);
-        }
-      }
+    global $is_https;
+    if ($is_https) {
+      return 'https://' . variable_get('rackspace_cloud_cdn_ssl_domain') . '/' . $target;
     }
-
-    $url = 'http://' . variable_get('rackspace_cloud_cdn_domain') . '/' . $target;
-    return $url;
+    else {
+      return 'http://' . variable_get('rackspace_cloud_cdn_domain') . '/' . $target;
+    }
   }
 
   /**
@@ -823,20 +789,26 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing dir_opendir (%uri)", array("%uri" => $uri), WATCHDOG_DEBUG);
     }
-    
-    $this->getContainer();
-    $prefix = file_uri_target($uri);
-    $list = $this->container->objectList(variable_get('rackspace_cloud_container'), 0, NULL, $prefix);
-    
-    if ($length = strlen($prefix)) {
-      $length++;
-      foreach ($list as $item) {
-        $item = substr_replace($item, '', 0, $length);
-      }
+
+    $this->uri = $uri;
+
+    $target = file_uri_target($this->uri);
+    if (!empty($target)) {
+      $target .= '/';
     }
-    
-    $this->directory_list = $list;
-    
+
+    if (!isset($this->container)) {
+      $this->getContainer();
+    }
+    $list = $this->container->objectList(array(
+      'path' => $target,
+    ));
+
+    $this->directoryList = array();
+    while ($item = $list->next()) {
+      $this->directoryList[] = substr($item->getName(), strlen($target));
+    }
+
     return TRUE;
   }
 
@@ -850,17 +822,14 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
     if (variable_get('rackspace_cloud_debug')) {
       watchdog("cloud_files", "executing dir_readdir", NULL, WATCHDOG_DEBUG);
     }
-    
-    $pointer = $this->directory_pointer;
-    
-    if (!empty($this->directory_list[$pointer])) {
-      $this->directory_pointer++;
-      return $this->directory_list[$pointer];
+
+    if ($this->directoryPointer < count($this->directoryList)) {
+      $next = $this->directoryList[$this->directoryPointer];
+      $this->directoryPointer++;
+      return $next;
     }
-    else {
-      return FALSE;
-    }
-    
+
+    return FALSE;
   }
 
   /**
@@ -874,7 +843,7 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing dir_rewinddir", NULL, WATCHDOG_DEBUG);
     }
 
-    $this->directory_pointer = 0;
+    $this->directoryPointer = 0;
     return TRUE;
   }
 
@@ -891,8 +860,8 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing dir_closedir", NULL, WATCHDOG_DEBUG);
     }
 
-    $this->directory_pointer = 0;
-    unset($this->directory_list);
+    $this->directoryPointer = 0;
+    unset($this->directoryList);
     return TRUE;
   }
 
@@ -907,7 +876,13 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
       watchdog("cloud_files", "executing getDirectoryPath", NULL, WATCHDOG_DEBUG);
     }
 
-    return "http://" . variable_get('rackspace_cloud_cdn_domain');
+    global $is_https;
+    if ($is_https) {
+      return 'https://' . variable_get('rackspace_cloud_cdn_ssl_domain');
+    }
+    else {
+      return 'http://' . variable_get('rackspace_cloud_cdn_domain');
+    }
   }
 
   /**
@@ -969,8 +944,6 @@ class RackspaceCloudFilesStreamWrapper implements DrupalStreamWrapperInterface {
    *   Rackspace container instance.
    */
   public function getContainer() {
-    libraries_load('php-opencloud');
-
     $client = $this->getClient();
     $object_store_service = $client->objectStoreService('cloudFiles', variable_get('rackspace_cloud_region'));
 
